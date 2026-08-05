@@ -1158,14 +1158,12 @@ function init() {
   setupListeners();
   initSupabase();
 
-  // Welcome message
-  setTimeout(() => {
-    showMsg('system', 'ZARA is online. Hold the mic or type to begin.');
-    // Auto-greet with voice after a short delay
-    setTimeout(() => {
-      speak('ZARA online. How can I help you today?');
-    }, 500);
-  }, 300);
+  if (state.openRouterKey) {
+    showMsg('system', 'ZARA online. Hold the mic or type to begin.');
+    setTimeout(() => { speak('ZARA online. How can I help you today?'); }, 600);
+  } else {
+    showMsg('system', 'Welcome to ZARA. Tap the gear icon and paste your OpenRouter API key to get started. You can get a free key at openrouter.ai/keys');
+  }
 }
 
 init();

@@ -21,7 +21,7 @@ OPENROUTER_BASE_URL = os.environ.get(
 )
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL = os.environ.get(
-    "OPENROUTER_MODEL", "google/gemini-2.5-flash-preview"
+    "OPENROUTER_MODEL", "google/gemma-4-26b-a4b-it:free"
 )
 OPENROUTER_SITE_URL = os.environ.get("OPENROUTER_SITE_URL", "https://voice-line.local")
 OPENROUTER_SITE_NAME = os.environ.get("OPENROUTER_SITE_NAME", "Voice Line")

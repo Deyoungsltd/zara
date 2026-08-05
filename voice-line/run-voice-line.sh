@@ -38,6 +38,14 @@ if ! command -v uv &>/dev/null; then
 fi
 echo "[check] uv: OK"
 
+# Load .env file if it exists
+if [ -f ".env" ]; then
+    echo "[setup] Loading .env..."
+    set -a
+    source .env
+    set +a
+fi
+
 # Sync dependencies
 if [ ! -d ".venv" ]; then
     echo "[setup] Creating virtual environment..."

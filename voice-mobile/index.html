@@ -229,7 +229,7 @@
 <div class="perm-overlay" id="permOverlay">
   <div class="perm-icon">&#x1F916;</div>
   <div class="perm-title">ZARA</div>
-  <div class="perm-desc" id="permDesc">I need access to your microphone and speakers to have a voice conversation with you. Tap below to grant permission.</div>
+  <div class="perm-desc" id="permDesc">I need access to your microphone and speakers to have a voice conversation with you. Tap below to grant permission.<br><br><span style="color:var(--accent);font-size:11px;">v3.0 — Voice-First Build</span></div>
   <button class="perm-btn" id="permBtn">GRANT ACCESS</button>
   <div class="perm-status" id="permStatus"></div>
 </div>
@@ -305,7 +305,7 @@
   </div>
 </div>
 
-<script>if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});</script>
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw2.js').then(r=>{console.log('SW v3 registered')});navigator.serviceWorker.addEventListener('controllerchange',()=>location.reload())}</script>
 <script src="./voice-config.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════════════════

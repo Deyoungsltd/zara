@@ -1,2 +1,38 @@
-skills/
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+*.egg
+
+# Environment / secrets
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Voice signal bus files (runtime only)
+.voice_state
+.voice_waveform
+.voice_loading_pid
+.voice_alert
+
+# Download / generated docs
+/download/
+
+# Tool results (internal)
+/tool-results/
+
+# Worklog (internal)
+/worklog.md
+
+# Node
 node_modules/
+
+# Scripts (build artifacts)
+/scripts/
+
+# Skills (internal tooling)
+/skills/

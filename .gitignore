@@ -8,6 +8,8 @@ __pycache__/
 # Environment / secrets
 .env
 .env.local
+voice-config.js
+voice-mobile/voice-config.js
 
 # OS
 .DS_Store

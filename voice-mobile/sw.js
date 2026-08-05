@@ -1,4 +1,4 @@
-const CACHE = 'voice-line-v1';
+const CACHE = 'zara-v2';
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
@@ -23,9 +23,10 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  // Network-first for API calls, cache-first for assets
-  if (e.request.url.includes('supabase.co') || e.request.url.includes('cdn.jsdelivr.net')) {
-    return; // Let these go to network always
+  const url = e.request.url;
+  // Always network for API calls and dynamic imports
+  if (url.includes('supabase.co') || url.includes('cdn.jsdelivr.net') || url.includes('openrouter.ai')) {
+    return;
   }
   e.respondWith(
     caches.match(e.request).then((cached) => {

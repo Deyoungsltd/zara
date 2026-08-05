@@ -1,15 +1,15 @@
 {
-  "name": "Voice Line",
-  "short_name": "VoiceLine",
-  "description": "Voice assistant powered by AI",
+  "name": "ZARA - AI Assistant",
+  "short_name": "ZARA",
+  "description": "Jarvis-style AI personal assistant with voice",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#0a0a0f",
-  "theme_color": "#0a0a0f",
+  "background_color": "#000408",
+  "theme_color": "#000408",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230a0a0f'/><circle cx='50' cy='50' r='22' fill='%23ff6b35'/><rect x='46' y='28' width='8' height='16' rx='4' fill='%230a0a0f'/><rect x='38' y='44' width='24' height='8' rx='4' fill='%230a0a0f'/></svg>",
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23000408'/><circle cx='50' cy='45' r='14' fill='none' stroke='%2300d4ff' stroke-width='2'/><circle cx='50' cy='45' r='4' fill='%2300d4ff'/><circle cx='42' cy='42' r='3' fill='%2300d4ff'/><circle cx='58' cy='42' r='3' fill='%2300d4ff'/><path d='M44 56 Q50 62 56 56' fill='none' stroke='%2300d4ff' stroke-width='1.5'/><path d='M30 45 L22 45' stroke='%2300d4ff' stroke-width='1.5'/><path d='M70 45 L78 45' stroke='%2300d4ff' stroke-width='1.5'/></svg>",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"

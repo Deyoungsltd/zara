@@ -5,26 +5,25 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0a0a0f">
+<meta name="theme-color" content="#000408">
 <link rel="manifest" href="manifest.json">
-<title>Voice Line</title>
+<title>ZARA</title>
 <style>
   :root {
-    --bg: #0a0a0f;
-    --surface: #141420;
-    --surface2: #1c1c2e;
-    --accent: #ff6b35;
-    --accent-glow: rgba(255, 107, 53, 0.3);
-    --text: #e8e6e3;
-    --text-dim: #7a7890;
+    --bg: #000408;
+    --surface: #0a0e18;
+    --surface2: #0f1524;
+    --accent: #00d4ff;
+    --accent2: #ff6b35;
+    --accent-glow: rgba(0,212,255,0.25);
+    --text: #d8e4f0;
+    --text-dim: #4a5a70;
     --green: #00e676;
     --red: #ff3d57;
-    --radius: 16px;
+    --amber: #ffab40;
     --safe-bottom: env(safe-area-inset-bottom, 0px);
   }
-
-  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
     background: var(--bg);
@@ -37,280 +36,183 @@
     user-select: none;
   }
 
-  /* ── Header ────────────────────────────── */
+  /* ── Header ── */
   header {
-    padding: 12px 20px;
-    padding-top: max(12px, env(safe-area-inset-top));
+    padding: 10px 16px;
+    padding-top: max(10px, env(safe-area-inset-top));
     display: flex;
     align-items: center;
     justify-content: space-between;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
-    background: rgba(10,10,15,0.9);
+    border-bottom: 1px solid rgba(0,212,255,0.08);
+    background: rgba(0,4,8,0.85);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     z-index: 10;
+    flex-shrink: 0;
   }
+  .logo { display:flex; align-items:center; gap:8px; font-size:15px; font-weight:700; letter-spacing:2px; color:var(--accent); }
+  .logo-dot { width:7px; height:7px; border-radius:50%; background:var(--text-dim); transition:all 0.3s; }
+  .logo-dot.listening { background:var(--green); box-shadow:0 0 8px var(--green); }
+  .logo-dot.thinking { background:var(--amber); box-shadow:0 0 8px var(--amber); animation:dotPulse 0.8s infinite; }
+  .logo-dot.speaking { background:var(--accent); box-shadow:0 0 8px var(--accent); animation:dotPulse 0.5s infinite; }
+  .logo-dot.error { background:var(--red); box-shadow:0 0 8px var(--red); }
+  @keyframes dotPulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .header-right { display:flex; align-items:center; gap:12px; }
+  .model-tag { font-size:10px; color:var(--text-dim); background:var(--surface2); padding:3px 8px; border-radius:6px; letter-spacing:0.5px; }
+  .header-btn { background:none; border:none; color:var(--text-dim); font-size:18px; cursor:pointer; padding:4px; }
+  .header-btn:active { color:var(--accent); }
 
-  .logo {
-    font-size: 18px;
-    font-weight: 700;
-    letter-spacing: -0.3px;
+  /* ── Face Canvas ── */
+  #faceSection {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
+    position: relative;
+    height: 280px;
+    background: radial-gradient(ellipse at center, rgba(0,212,255,0.03) 0%, transparent 70%);
   }
-  .logo-dot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    background: var(--accent);
-    box-shadow: 0 0 12px var(--accent-glow);
-    transition: background 0.3s;
-  }
-  .logo-dot.listening { background: var(--green); box-shadow: 0 0 12px rgba(0,230,118,0.4); }
-  .logo-dot.thinking { background: #ffab40; box-shadow: 0 0 12px rgba(255,171,64,0.4); animation: pulse 1s infinite; }
-  .logo-dot.speaking { background: var(--accent); box-shadow: 0 0 12px var(--accent-glow); animation: pulse 0.6s infinite; }
-
-  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
-
-  .header-right {
-    display: flex; gap: 12px; align-items: center;
-  }
-  .header-btn {
-    background: none; border: none; color: var(--text-dim); font-size: 20px;
-    cursor: pointer; padding: 4px;
-  }
-  .model-tag {
-    font-size: 11px;
+  #faceCanvas { display:block; }
+  .face-label {
+    position: absolute;
+    bottom: 12px;
+    font-size: 10px;
+    letter-spacing: 3px;
     color: var(--text-dim);
-    background: var(--surface);
-    padding: 4px 10px;
-    border-radius: 20px;
-     max-width: 140px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    text-transform: uppercase;
   }
+  .face-status {
+    position: absolute;
+    bottom: -2px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--accent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .face-status.visible { opacity: 1; }
 
-  /* ── Chat Area ──────────────────────────── */
+  /* ── Chat ── */
   #chat {
     flex: 1;
     overflow-y: auto;
-    padding: 16px 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    scroll-behavior: smooth;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .msg {
-    max-width: 85%;
     padding: 12px 16px;
-    border-radius: var(--radius);
-    font-size: 15px;
-    line-height: 1.5;
-    animation: msgIn 0.25s ease-out;
-  }
-  @keyframes msgIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-
-  .msg.user {
-    align-self: flex-end;
-    background: var(--accent);
-    color: #fff;
-    border-bottom-right-radius: 4px;
-  }
-  .msg.assistant {
-    align-self: flex-start;
-    background: var(--surface);
-    border-bottom-left-radius: 4px;
-  }
-  .msg.system {
-    align-self: center;
-    font-size: 12px;
-    color: var(--text-dim);
-    background: none;
-    padding: 4px;
-  }
-
-  .msg .typing-dots::after {
-    content: '...';
-    animation: dots 1.2s steps(4) infinite;
-  }
-  @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
-
-  .empty-state {
-    flex: 1;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    color: var(--text-dim);
-    text-align: center;
-    padding: 40px;
+    gap: 8px;
+    scroll-behavior: smooth;
   }
-  .empty-icon { font-size: 48px; opacity: 0.3; }
-  .empty-title { font-size: 18px; font-weight: 600; color: var(--text); }
-  .empty-sub { font-size: 14px; max-width: 260px; }
+  .empty-state { display:none; flex-direction:column; align-items:center; justify-content:center; flex:1; gap:8px; opacity:0.3; }
+  .empty-state.visible { display:flex; }
+  .empty-icon { font-size:32px; }
+  .empty-title { font-size:14px; font-weight:600; letter-spacing:2px; color:var(--accent); }
+  .empty-sub { font-size:12px; color:var(--text-dim); text-align:center; max-width:260px; line-height:1.5; }
 
-  /* ── Bottom Control Bar ────────────────── */
+  .msg { max-width:85%; padding:10px 14px; border-radius:14px; font-size:14px; line-height:1.5; word-break:break-word; }
+  .msg.user { align-self:flex-end; background:var(--surface2); border:1px solid rgba(0,212,255,0.12); color:var(--text); }
+  .msg.assistant { align-self:flex-start; background:rgba(0,212,255,0.06); border:1px solid rgba(0,212,255,0.1); color:var(--text); }
+  .msg.system { align-self:center; font-size:11px; color:var(--text-dim); background:none; border:none; text-align:center; max-width:90%; padding:6px; }
+  .msg.tool { align-self:flex-start; font-size:12px; color:var(--accent); background:rgba(0,212,255,0.04); border:1px dashed rgba(0,212,255,0.15); border-radius:10px; max-width:90%; }
+
+  .typing-dots { display:inline-flex; gap:4px; padding:4px 0; }
+  .typing-dots span { width:6px; height:6px; border-radius:50%; background:var(--accent); opacity:0.3; animation:typingBounce 1.2s infinite; }
+  .typing-dots span:nth-child(2) { animation-delay:0.2s; }
+  .typing-dots span:nth-child(3) { animation-delay:0.4s; }
+  @keyframes typingBounce { 0%,60%,100%{transform:translateY(0);opacity:0.3} 30%{transform:translateY(-6px);opacity:1} }
+
+  /* ── Controls ── */
   .controls {
-    padding: 12px 20px;
-    padding-bottom: max(16px, calc(12px + var(--safe-bottom)));
-    border-top: 1px solid rgba(255,255,255,0.06);
-    background: rgba(10,10,15,0.95);
+    flex-shrink: 0;
+    padding: 10px 16px;
+    padding-bottom: max(14px, calc(14px + var(--safe-bottom)));
+    background: rgba(0,4,8,0.9);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(0,212,255,0.08);
   }
-
-  .controls-inner {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  /* Text input */
-  .text-input-wrap {
-    flex: 1;
-    position: relative;
-  }
+  .controls-inner { display:flex; align-items:center; gap:10px; max-width:500px; margin:0 auto; }
+  .text-input-wrap { flex:1; position:relative; }
   .text-input {
-    width: 100%;
-    background: var(--surface);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 24px;
-    padding: 12px 16px;
-    color: var(--text);
-    font-size: 15px;
-    outline: none;
-    transition: border-color 0.2s;
+    width:100%; background:var(--surface2); border:1px solid rgba(255,255,255,0.06);
+    border-radius:24px; padding:10px 16px; color:var(--text); font-size:14px; outline:none; transition:border-color 0.2s;
   }
-  .text-input:focus { border-color: var(--accent); }
-  .text-input::placeholder { color: var(--text-dim); }
+  .text-input:focus { border-color:var(--accent); }
+  .text-input::placeholder { color:var(--text-dim); }
 
-  /* Mic button */
   .mic-btn {
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    border: none;
-    background: var(--accent);
-    color: #fff;
-    font-size: 24px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 0.15s, box-shadow 0.2s, background 0.2s;
-    flex-shrink: 0;
-    position: relative;
+    width:52px; height:52px; border-radius:50%; border:2px solid rgba(0,212,255,0.3);
+    background:var(--surface); color:var(--accent); font-size:22px;
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+    transition:all 0.2s; flex-shrink:0; position:relative;
   }
-  .mic-btn:active { transform: scale(0.92); }
+  .mic-btn:active { transform:scale(0.92); }
   .mic-btn.listening {
-    background: var(--green);
-    box-shadow: 0 0 0 6px rgba(0,230,118,0.2), 0 0 30px rgba(0,230,118,0.3);
-    animation: micPulse 1.2s infinite;
+    background:var(--green); border-color:var(--green); color:#000;
+    box-shadow:0 0 0 6px rgba(0,230,118,0.15), 0 0 30px rgba(0,230,118,0.2);
+    animation:micPulse 1.2s infinite;
   }
   .mic-btn.speaking {
-    background: var(--accent);
-    box-shadow: 0 0 0 6px var(--accent-glow), 0 0 30px var(--accent-glow);
-    animation: micPulse 0.8s infinite;
+    background:var(--accent); border-color:var(--accent); color:#000;
+    box-shadow:0 0 0 6px var(--accent-glow), 0 0 30px var(--accent-glow);
+    animation:micPulse 0.8s infinite;
   }
   .mic-btn.thinking {
-    background: #ffab40;
-    box-shadow: 0 0 0 6px rgba(255,171,64,0.2);
+    border-color:var(--amber); color:var(--amber);
+    box-shadow:0 0 0 6px rgba(255,171,64,0.15);
   }
-  .mic-btn:disabled { opacity: 0.4; pointer-events: none; }
+  .mic-btn:disabled { opacity:0.3; pointer-events:none; }
+  @keyframes micPulse { 0%,100%{box-shadow:0 0 0 6px rgba(0,212,255,0.1)} 50%{box-shadow:0 0 0 14px rgba(0,212,255,0.03)} }
 
-  @keyframes micPulse {
-    0%,100% { box-shadow: 0 0 0 6px rgba(0,230,118,0.15); }
-    50% { box-shadow: 0 0 0 14px rgba(0,230,118,0.05); }
+  /* ── Stop Button ── */
+  .stop-btn {
+    position:fixed; bottom:80px; left:50%; transform:translateX(-50%);
+    background:var(--red); color:#fff; border:none; border-radius:20px;
+    padding:8px 20px; font-size:13px; font-weight:600; cursor:pointer;
+    z-index:20; display:none; letter-spacing:0.5px;
   }
+  .stop-btn.visible { display:block; }
 
-  /* ── Settings Panel ─────────────────────── */
+  /* ── Settings Panel ── */
   .panel-overlay {
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.6);
-    z-index: 100;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.3s;
+    position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:100;
+    opacity:0; pointer-events:none; transition:opacity 0.3s;
   }
-  .panel-overlay.open { opacity: 1; pointer-events: auto; }
-
+  .panel-overlay.open { opacity:1; pointer-events:auto; }
   .panel {
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    background: var(--surface);
-    border-radius: 20px 20px 0 0;
-    padding: 20px;
-    padding-bottom: max(24px, calc(20px + var(--safe-bottom)));
-    z-index: 101;
-    transform: translateY(100%);
-    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
-    max-height: 80dvh;
-    overflow-y: auto;
+    position:fixed; bottom:0; left:0; right:0;
+    background:var(--surface); border-radius:20px 20px 0 0;
+    padding:20px; padding-bottom:max(24px, calc(20px + var(--safe-bottom)));
+    z-index:101; transform:translateY(100%);
+    transition:transform 0.35s cubic-bezier(0.32,0.72,0,1);
+    max-height:80dvh; overflow-y:auto;
+    border-top:1px solid rgba(0,212,255,0.1);
   }
-  .panel.open { transform: translateY(0); }
-
-  .panel-handle {
-    width: 36px; height: 4px;
-    background: rgba(255,255,255,0.2);
-    border-radius: 2px;
-    margin: 0 auto 20px;
-  }
-  .panel h2 { font-size: 18px; margin-bottom: 20px; }
-
-  .field { margin-bottom: 16px; }
-  .field label {
-    display: block;
-    font-size: 12px;
-    color: var(--text-dim);
-    margin-bottom: 6px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
+  .panel.open { transform:translateY(0); }
+  .panel-handle { width:36px; height:4px; background:rgba(255,255,255,0.15); border-radius:2px; margin:0 auto 16px; }
+  .panel h2 { font-size:16px; margin-bottom:16px; color:var(--accent); letter-spacing:1px; }
+  .field { margin-bottom:14px; }
+  .field label { display:block; font-size:11px; color:var(--text-dim); margin-bottom:5px; text-transform:uppercase; letter-spacing:0.5px; }
   .field input, .field select {
-    width: 100%;
-    background: var(--surface2);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 12px;
-    padding: 10px 14px;
-    color: var(--text);
-    font-size: 14px;
-    outline: none;
+    width:100%; background:var(--surface2); border:1px solid rgba(255,255,255,0.06);
+    border-radius:10px; padding:9px 12px; color:var(--text); font-size:13px; outline:none;
   }
-  .field input:focus, .field select:focus { border-color: var(--accent); }
+  .field input:focus, .field select:focus { border-color:var(--accent); }
+  .field .hint { font-size:10px; color:var(--text-dim); margin-top:3px; }
+  .btn-row { display:flex; gap:10px; margin-top:16px; }
+  .btn { flex:1; padding:11px; border:none; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; }
+  .btn-primary { background:var(--accent); color:#000; }
+  .btn-secondary { background:var(--surface2); color:var(--text); }
 
-  .field .hint { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+  /* ── History ── */
+  .history-item { padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.04); cursor:pointer; }
+  .history-item:last-child { border-bottom:none; }
+  .history-date { font-size:11px; color:var(--text-dim); }
+  .history-preview { font-size:13px; margin-top:3px; color:var(--text); }
+  .history-meta { font-size:10px; color:var(--text-dim); margin-top:2px; }
 
-  .btn-row { display: flex; gap: 10px; margin-top: 20px; }
-  .btn {
-    flex: 1;
-    padding: 12px;
-    border: none;
-    border-radius: 12px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .btn-primary { background: var(--accent); color: #fff; }
-  .btn-secondary { background: var(--surface2); color: var(--text); }
-
-  /* ── History Panel ──────────────────────── */
-  .history-item {
-    padding: 12px 0;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
-    cursor: pointer;
-  }
-  .history-item:last-child { border-bottom: none; }
-  .history-date { font-size: 12px; color: var(--text-dim); }
-  .history-preview { font-size: 14px; margin-top: 4px; color: var(--text); }
-  .history-meta { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
-
-  /* ── Scrollbar ──────────────────────────── */
-  #chat::-webkit-scrollbar { width: 3px; }
-  #chat::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+  /* ── Scrollbar ── */
+  #chat::-webkit-scrollbar { width:2px; }
+  #chat::-webkit-scrollbar-thumb { background:rgba(0,212,255,0.15); border-radius:2px; }
 </style>
 </head>
 <body>
@@ -318,16 +220,28 @@
 <header>
   <div class="logo">
     <div class="logo-dot" id="statusDot"></div>
-    <span>Voice Line</span>
+    <span>ZARA</span>
   </div>
   <div class="header-right">
-    <span class="model-tag" id="modelTag">gemma-4:free</span>
+    <span class="model-tag" id="modelTag">gemma-4</span>
     <button class="header-btn" id="historyBtn" title="History">&#x1D565;</button>
     <button class="header-btn" id="settingsBtn" title="Settings">&#x2699;</button>
   </div>
 </header>
 
-<div id="chat"></div>
+<div id="faceSection">
+  <canvas id="faceCanvas"></canvas>
+  <div class="face-label">PERSONAL AI ASSISTANT</div>
+  <div class="face-status" id="faceStatus"></div>
+</div>
+
+<div id="chat">
+  <div class="empty-state visible" id="emptyState">
+    <div class="empty-icon">&#x2728;</div>
+    <div class="empty-title">ZARA</div>
+    <div class="empty-sub">Hold the mic to talk, or type a message. I respond with voice.</div>
+  </div>
+</div>
 
 <div class="controls">
   <div class="controls-inner">
@@ -338,40 +252,40 @@
   </div>
 </div>
 
+<button class="stop-btn" id="stopBtn">STOP</button>
+
 <!-- Settings Panel -->
 <div class="panel-overlay" id="settingsOverlay"></div>
 <div class="panel" id="settingsPanel">
   <div class="panel-handle"></div>
-  <h2>Settings</h2>
+  <h2>CONFIGURATION</h2>
   <div class="field">
     <label>OpenRouter API Key</label>
     <input type="text" id="setOpenRouterKey" placeholder="sk-or-v1-...">
-    <div class="hint">Required. Get one at openrouter.ai/keys</div>
+    <div class="hint">Required for AI responses. Get one at openrouter.ai/keys</div>
   </div>
   <div class="field">
     <label>Supabase Project URL (optional)</label>
     <input type="url" id="setSupabaseUrl" placeholder="https://xxxxx.supabase.co">
-    <div class="hint">For history sync across devices</div>
+    <div class="hint">For conversation history sync</div>
   </div>
   <div class="field">
-    <label>Supabase Anon Key</label>
+    <label>Supabase Anon Key (optional)</label>
     <input type="text" id="setSupabaseKey" placeholder="eyJ...">
   </div>
   <div class="field">
-    <label>Model</label>
+    <label>AI Model</label>
     <select id="setModel">
       <option value="google/gemma-4-26b-a4b-it:free">Gemma 4 26B (free)</option>
       <option value="google/gemma-4-31b-it:free">Gemma 4 31B (free)</option>
       <option value="meta-llama/llama-4-maverick:free">Llama 4 Maverick (free)</option>
       <option value="nvidia/nemotron-3-super-120b-a12b:free">Nemotron 3 Super (free)</option>
     </select>
-    <div class="hint">Paid models require credits on your OpenRouter account</div>
+    <div class="hint">Free models work immediately. Paid models need OpenRouter credits.</div>
   </div>
   <div class="field">
     <label>TTS Voice</label>
-    <select id="setVoice">
-      <!-- Populated dynamically -->
-    </select>
+    <select id="setVoice"><option value="">Default</option></select>
   </div>
   <div class="btn-row">
     <button class="btn btn-secondary" id="settingsCancel">Cancel</button>
@@ -383,7 +297,7 @@
 <div class="panel-overlay" id="historyOverlay"></div>
 <div class="panel" id="historyPanel">
   <div class="panel-handle"></div>
-  <h2>Session History</h2>
+  <h2>SESSION HISTORY</h2>
   <div id="historyList"></div>
   <div class="btn-row">
     <button class="btn btn-secondary" id="newChatBtn">New Chat</button>
@@ -392,19 +306,26 @@
 </div>
 
 <script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
-}
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
 </script>
+<!-- Config injected at deploy time from Railway env vars -->
+<script src="./voice-config.js"></script>
 <script>
-// ── State ──────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
+//  ZARA — Jarvis-Style AI Personal Assistant
+// ═══════════════════════════════════════════════════════════
+
+// ── Credentials loaded from voice-config.js (generated at deploy) ──
+const CFG = window.ZARA_CONFIG || {};
+
+// ── State ──
 const state = {
-  openRouterKey: localStorage.getItem('vl_openRouterKey') || '',
-  supabaseUrl: localStorage.getItem('vl_supabaseUrl') || '',
-  supabaseKey: localStorage.getItem('vl_supabaseKey') || '',
-  model: localStorage.getItem('vl_model') || 'google/gemma-4-26b-a4b-it:free',
+  openRouterKey: localStorage.getItem('vl_openRouterKey') || CFG.openRouterKey || '',
+  supabaseUrl: localStorage.getItem('vl_supabaseUrl') || CFG.supabaseUrl || '',
+  supabaseKey: localStorage.getItem('vl_supabaseKey') || CFG.supabaseKey || '',
+  model: localStorage.getItem('vl_model') || CFG.model || 'google/gemma-4-26b-a4b-it:free',
   voiceName: localStorage.getItem('vl_voiceName') || '',
-  messages: [],       // current session: [{role, content}]
+  messages: [],
   sessionId: null,
   isListening: false,
   isThinking: false,
@@ -412,70 +333,448 @@ const state = {
   recognition: null,
   synthesis: window.speechSynthesis,
   supabase: null,
+  ttsUnlocked: false,
 };
 
-// ── DOM refs ───────────────────────────────────────────
+// ── DOM ──
 const $chat = document.getElementById('chat');
+const $empty = document.getElementById('emptyState');
 const $mic = document.getElementById('micBtn');
 const $input = document.getElementById('textInput');
 const $dot = document.getElementById('statusDot');
 const $modelTag = document.getElementById('modelTag');
-const $settingsBtn = document.getElementById('settingsBtn');
-const $settingsPanel = document.getElementById('settingsPanel');
-const $settingsOverlay = document.getElementById('settingsOverlay');
-const $historyBtn = document.getElementById('historyBtn');
-const $historyPanel = document.getElementById('historyPanel');
-const $historyOverlay = document.getElementById('historyOverlay');
-const $historyList = document.getElementById('historyList');
+const $faceStatus = document.getElementById('faceStatus');
+const $stopBtn = document.getElementById('stopBtn');
 
-// ── Init ───────────────────────────────────────────────
-function init() {
-  populateVoices();
-  updateModelTag();
-  renderEmptyState();
+// ═══════════════════════════════════════════════════════════
+//  JARVIS HOLOGRAPHIC FACE
+// ═══════════════════════════════════════════════════════════
+const canvas = document.getElementById('faceCanvas');
+const ctx = canvas.getContext('2d');
+let faceW, faceH, faceCx, faceCy;
+let animFrame = 0;
+let faceState = 'idle'; // idle, listening, thinking, speaking
+let faceIntensity = 0;
+let particles = [];
+let audioData = new Uint8Array(64);
 
-  if (state.openRouterKey) {
-    showMsg('system', 'Ready. Hold the mic to talk, or type below.');
-  } else {
-    showMsg('system', 'Tap the gear icon to add your OpenRouter API key to get started.');
-  }
-
-  if (state.supabaseUrl && state.supabaseKey) {
-    initSupabase();
-  }
-
-  setupSpeechRecognition();
-  setupListeners();
+function resizeCanvas() {
+  const section = document.getElementById('faceSection');
+  const dpr = window.devicePixelRatio || 1;
+  faceW = section.clientWidth;
+  faceH = section.clientHeight;
+  canvas.width = faceW * dpr;
+  canvas.height = faceH * dpr;
+  canvas.style.width = faceW + 'px';
+  canvas.style.height = faceH + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  faceCx = faceW / 2;
+  faceCy = faceH / 2 - 10;
+  initParticles();
 }
 
-// ── Supabase ───────────────────────────────────────────
-async function initSupabase() {
-  try {
-    // Load Supabase JS from CDN
-    if (!window.supabase) {
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-      document.head.appendChild(script);
-      await new Promise(r => script.onload = r);
+function initParticles() {
+  particles = [];
+  for (let i = 0; i < 80; i++) {
+    particles.push({
+      x: faceCx + (Math.random()-0.5) * 200,
+      y: faceCy + (Math.random()-0.5) * 220,
+      vx: (Math.random()-0.5) * 0.3,
+      vy: (Math.random()-0.5) * 0.3,
+      size: Math.random() * 1.5 + 0.5,
+      alpha: Math.random() * 0.4 + 0.1,
+      life: Math.random() * 200 + 100,
+    });
+  }
+}
+
+function setFaceState(s) {
+  faceState = s;
+  $faceStatus.textContent = s === 'listening' ? 'LISTENING' : s === 'thinking' ? 'PROCESSING' : s === 'speaking' ? 'SPEAKING' : '';
+  $faceStatus.classList.toggle('visible', s !== 'idle');
+}
+
+function drawFace() {
+  animFrame++;
+  ctx.clearRect(0, 0, faceW, faceH);
+
+  const t = animFrame * 0.015;
+  const intensity = faceState === 'idle' ? 0.4 : faceState === 'listening' ? 0.7 : faceState === 'thinking' ? 0.85 : 0.9;
+  faceIntensity += (intensity - faceIntensity) * 0.05;
+  const I = faceIntensity;
+
+  const accentR = 0, accentG = 212, accentB = 255;
+  const accentStr = `rgba(${accentR},${accentG},${accentB},`;
+
+  // Background glow
+  const bgGrad = ctx.createRadialGradient(faceCx, faceCy, 0, faceCx, faceCy, 140);
+  bgGrad.addColorStop(0, accentStr + (0.06 * I) + ')');
+  bgGrad.addColorStop(0.5, accentStr + (0.02 * I) + ')');
+  bgGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, faceW, faceH);
+
+  // Arc Reactor Core
+  const coreRadius = 18 + Math.sin(t * 2) * 2;
+  const coreGrad = ctx.createRadialGradient(faceCx, faceCy, 0, faceCx, faceCy, coreRadius);
+  coreGrad.addColorStop(0, accentStr + (0.9 * I) + ')');
+  coreGrad.addColorStop(0.4, accentStr + (0.5 * I) + ')');
+  coreGrad.addColorStop(0.7, accentStr + (0.15 * I) + ')');
+  coreGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = coreGrad;
+  ctx.beginPath();
+  ctx.arc(faceCx, faceCy, coreRadius, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Inner bright dot
+  ctx.fillStyle = `rgba(255,255,255,${0.8 * I})`;
+  ctx.beginPath();
+  ctx.arc(faceCx, faceCy, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Rotating rings
+  for (let ring = 0; ring < 3; ring++) {
+    const r = 30 + ring * 22;
+    const segments = 6 + ring * 4;
+    const rotSpeed = (ring % 2 === 0 ? 1 : -1) * (0.3 + ring * 0.15);
+    const gap = 0.15 + ring * 0.05;
+
+    ctx.strokeStyle = accentStr + ((0.25 - ring * 0.06) * I) + ')';
+    ctx.lineWidth = 1.2 - ring * 0.2;
+    ctx.beginPath();
+    for (let i = 0; i < segments; i++) {
+      const startA = t * rotSpeed + (i / segments) * Math.PI * 2;
+      const endA = startA + (Math.PI * 2 / segments) * (1 - gap);
+      ctx.moveTo(faceCx + Math.cos(startA) * r, faceCy + Math.sin(startA) * r);
+      ctx.arc(faceCx, faceCy, r, startA, endA);
     }
-    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
-    state.supabase = createClient(state.supabaseUrl, state.supabaseKey);
-    console.log('[vl] Supabase connected');
-  } catch (e) {
-    console.error('[vl] Supabase init failed:', e);
-    showMsg('system', 'Failed to connect to Supabase. Check your settings.');
+    ctx.stroke();
+
+    // Ring dots
+    for (let i = 0; i < segments; i++) {
+      const a = t * rotSpeed + (i / segments) * Math.PI * 2 + Math.PI / segments * (1 - gap) / 2;
+      ctx.fillStyle = accentStr + (0.6 * I) + ')';
+      ctx.beginPath();
+      ctx.arc(faceCx + Math.cos(a) * r, faceCy + Math.sin(a) * r, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Eye visor shape
+  const visorW = 55;
+  const visorY = faceCy - 8;
+  ctx.strokeStyle = accentStr + (0.6 * I) + ')';
+  ctx.lineWidth = 1.8;
+  ctx.beginPath();
+  // Left eye
+   ctx.ellipse(faceCx - 28, visorY, 18, 6, -0.1, 0, Math.PI * 2);
+  ctx.stroke();
+  // Right eye
+   ctx.beginPath();
+  ctx.ellipse(faceCx + 28, visorY, 18, 6, 0.1, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Eye fill (pulsing)
+  const eyeAlpha = (0.3 + Math.sin(t * 3) * 0.15) * I;
+  ctx.fillStyle = accentStr + eyeAlpha + ')';
+  ctx.beginPath();
+  ctx.ellipse(faceCx - 28, visorY, 14, 3.5, -0.1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(faceCx + 28, visorY, 14, 3.5, 0.1, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Eye bright centers
+  ctx.fillStyle = `rgba(255,255,255,${0.7 * I})`;
+  ctx.beginPath();
+  ctx.arc(faceCx - 28, visorY, 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(faceCx + 28, visorY, 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Mouth arc (waveform-style)
+  const mouthY = faceCy + 28;
+  const mouthW = 35;
+  ctx.strokeStyle = accentStr + (0.4 * I) + ')';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  for (let x = -mouthW; x <= mouthW; x++) {
+    const wave = faceState === 'speaking'
+      ? Math.sin(x * 0.3 + t * 8) * 4 + Math.sin(x * 0.5 + t * 12) * 2
+      : Math.sin(x * 0.15 + t * 1.5) * 1.5;
+    const px = faceCx + x;
+    const py = mouthY + wave;
+    if (x === -mouthW) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+
+  // Side data arcs
+  for (let side = -1; side <= 1; side += 2) {
+    const sx = faceCx + side * 85;
+    const sy = faceCy;
+    for (let i = 0; i < 5; i++) {
+      const a = t * 0.5 * side + i * 0.8;
+      const r = 10 + i * 6;
+      const arcLen = 0.3 + Math.sin(t + i) * 0.15;
+      ctx.strokeStyle = accentStr + ((0.15 - i * 0.02) * I) + ')';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.arc(sx, sy, r, a, a + arcLen);
+      ctx.stroke();
+    }
+  }
+
+  // Horizontal scan lines
+  for (let i = 0; i < 6; i++) {
+    const ly = faceCy - 60 + i * 24;
+    const lineAlpha = (0.03 + Math.sin(t * 0.5 + i) * 0.015) * I;
+    ctx.strokeStyle = accentStr + lineAlpha + ')';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(faceCx - 100, ly);
+    ctx.lineTo(faceCx + 100, ly);
+    ctx.stroke();
+  }
+
+  // Floating particles
+  particles.forEach(p => {
+    p.x += p.vx + Math.sin(t + p.life) * 0.1;
+    p.y += p.vy + Math.cos(t * 0.7 + p.life) * 0.1;
+    p.life--;
+    if (p.life <= 0) {
+      p.x = faceCx + (Math.random()-0.5) * 200;
+      p.y = faceCy + (Math.random()-0.5) * 220;
+      p.life = Math.random() * 200 + 100;
+    }
+    const pAlpha = p.alpha * I * Math.min(1, p.life / 30);
+    ctx.fillStyle = accentStr + pAlpha + ')';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // Audio-reactive bars (when speaking)
+  if (faceState === 'speaking' || faceState === 'listening') {
+    const barCount = 32;
+    const barWidth = 2;
+    const totalWidth = barCount * (barWidth + 1.5);
+    const startX = faceCx - totalWidth / 2;
+    const baseY = faceCy + 55;
+
+    for (let i = 0; i < barCount; i++) {
+      const val = faceState === 'listening'
+        ? (audioData[i * 2] || 0) / 255
+        : (Math.sin(t * 6 + i * 0.5) * 0.5 + 0.5) * (0.3 + Math.random() * 0.4);
+      const h = val * 20 + 1;
+      const alpha = (0.15 + val * 0.35) * I;
+      ctx.fillStyle = accentStr + alpha + ')';
+      ctx.fillRect(startX + i * (barWidth + 1.5), baseY - h, barWidth, h);
+    }
+  }
+
+  // Hexagonal grid (subtle background)
+  ctx.strokeStyle = accentStr + (0.04 * I) + ')';
+  ctx.lineWidth = 0.5;
+  for (let row = -2; row <= 2; row++) {
+    for (let col = -3; col <= 3; col++) {
+      const hx = faceCx + col * 40 + (row % 2) * 20;
+      const hy = faceCy + row * 35 - 5;
+      drawHex(hx, hy, 16);
+    }
+  }
+
+  requestAnimationFrame(drawFace);
+}
+
+function drawHex(cx, cy, r) {
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = Math.PI / 3 * i - Math.PI / 6;
+    const x = cx + Math.cos(a) * r;
+    const y = cy + Math.sin(a) * r;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.stroke();
+}
+
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+drawFace();
+
+// ═══════════════════════════════════════════════════════════
+//  TTS — Fixed for mobile Safari & Chrome
+// ═══════════════════════════════════════════════════════════
+function unlockTTS() {
+  if (state.ttsUnlocked) return;
+  // Mobile browsers require a user gesture before TTS works
+  const u = new SpeechSynthesisUtterance('');
+  u.volume = 0;
+  state.synthesis.speak(u);
+  state.ttsUnlocked = true;
+}
+
+function speak(text) {
+  if (!text || !state.synthesis) return;
+  cancelSpeaking();
+  unlockTTS();
+
+  // Clean text for speech - remove markdown, emojis, etc.
+  let clean = text
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/`(.*?)`/g, '$1')
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/#{1,6}\s/g, '')
+    .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+    .replace(/\n+/g, '. ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!clean) return;
+
+  // Split long text into chunks (mobile TTS has a ~200 char limit before it stops)
+  const chunks = splitIntoChunks(clean, 180);
+  speakChunks(chunks, 0);
+}
+
+function splitIntoChunks(text, maxLen) {
+  const chunks = [];
+  const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text];
+  let current = '';
+  for (const s of sentences) {
+    if ((current + s).length > maxLen && current) {
+      chunks.push(current.trim());
+      current = s;
+    } else {
+      current += s;
+    }
+  }
+  if (current.trim()) chunks.push(current.trim());
+  return chunks;
+}
+
+function speakChunks(chunks, idx) {
+  if (idx >= chunks.length || !state.isSpeaking) return;
+
+  const utter = new SpeechSynthesisUtterance(chunks[idx]);
+  utter.rate = 1.0;
+  utter.pitch = 1.0;
+  utter.volume = 1.0;
+
+  // Try to pick a good English voice
+  const voices = state.synthesis.getVoices();
+  if (state.voiceName) {
+    const v = voices.find(v => v.name === state.voiceName);
+    if (v) utter.voice = v;
+  } else {
+    // Prefer natural-sounding voices
+    const preferred = voices.find(v => 
+      (v.name.includes('Samantha') || v.name.includes('Daniel') || v.name.includes('Google') || v.name.includes('Microsoft')) &&
+      v.lang.startsWith('en') && !v.localService === false
+    );
+    if (preferred) utter.voice = preferred;
+    else {
+      const enVoice = voices.find(v => v.lang.startsWith('en'));
+      if (enVoice) utter.voice = enVoice;
+    }
+  }
+
+  utter.onstart = () => {
+    state.isSpeaking = true;
+    $mic.classList.add('speaking');
+    $dot.className = 'logo-dot speaking';
+    setFaceState('speaking');
+    $stopBtn.classList.add('visible');
+  };
+
+  utter.onend = () => {
+    // Speak next chunk
+    if (idx + 1 < chunks.length && state.isSpeaking) {
+      speakChunks(chunks, idx + 1);
+    } else {
+      state.isSpeaking = false;
+      $mic.classList.remove('speaking');
+      $stopBtn.classList.remove('visible');
+      setFaceState('idle');
+      if (!state.isThinking) $dot.className = 'logo-dot';
+    }
+  };
+
+  utter.onerror = (e) => {
+    console.warn('[zara] TTS error:', e.error);
+    if (e.error === 'interrupted' || e.error === 'canceled') return;
+    // Try next chunk on error
+    if (idx + 1 < chunks.length) {
+      speakChunks(chunks, idx + 1);
+    } else {
+      state.isSpeaking = false;
+      $mic.classList.remove('speaking');
+      $stopBtn.classList.remove('visible');
+      setFaceState('idle');
+      if (!state.isThinking) $dot.className = 'logo-dot';
+    }
+  };
+
+  state.synthesis.speak(utter);
+
+  // CRITICAL: iOS Safari pauses TTS after ~15s. This keeps it alive.
+  if (chunks[idx].length > 100) {
+    keepTTSAlive();
   }
 }
 
-// ── Speech Recognition (STT) ───────────────────────────
+let ttsKeepAlive = null;
+function keepTTSAlive() {
+  clearInterval(ttsKeepAlive);
+  ttsKeepAlive = setInterval(() => {
+    if (state.synthesis.speaking) {
+      state.synthesis.pause();
+      state.synthesis.resume();
+    } else {
+      clearInterval(ttsKeepAlive);
+    }
+  }, 10000);
+}
+
+function cancelSpeaking() {
+  clearInterval(ttsKeepAlive);
+  state.synthesis.cancel();
+  state.isSpeaking = false;
+  $mic.classList.remove('speaking');
+  $stopBtn.classList.remove('visible');
+}
+
+function populateVoices() {
+  const load = () => {
+    const voices = state.synthesis.getVoices();
+    const $sel = document.getElementById('setVoice');
+    $sel.innerHTML = '<option value="">Auto (best available)</option>';
+    voices.filter(v => v.lang.startsWith('en')).forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.name;
+      opt.textContent = v.name + (v.localService ? ' (local)' : ' (network)');
+      $sel.appendChild(opt);
+    });
+    if (state.voiceName) $sel.value = state.voiceName;
+  };
+  load();
+  state.synthesis.onvoiceschanged = load;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SPEECH RECOGNITION (STT)
+// ═══════════════════════════════════════════════════════════
 function setupSpeechRecognition() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) {
     $mic.disabled = true;
-    showMsg('system', 'Speech recognition not supported in this browser. Use Chrome or Safari.');
+    showMsg('system', 'Speech recognition not supported. Use Chrome or Safari, or type below.');
     return;
   }
-
   state.recognition = new SR();
   state.recognition.continuous = false;
   state.recognition.interimResults = false;
@@ -483,31 +782,27 @@ function setupSpeechRecognition() {
 
   state.recognition.onresult = (e) => {
     const transcript = e.results[0][0].transcript.trim();
-    if (transcript) {
-      sendMessage(transcript);
-    }
+    if (transcript) sendMessage(transcript);
   };
-
   state.recognition.onerror = (e) => {
-    console.warn('[vl] STT error:', e.error);
-    if (e.error !== 'no-speech') {
+    if (e.error !== 'no-speech' && e.error !== 'aborted') {
       showMsg('system', 'Voice error: ' + e.error);
     }
     stopListening();
   };
-
-  state.recognition.onend = () => {
-    stopListening();
-  };
+  state.recognition.onend = () => stopListening();
 }
 
 function startListening() {
   if (!state.recognition || state.isThinking || state.isSpeaking) return;
   cancelSpeaking();
-  state.recognition.start();
-  state.isListening = true;
-  $mic.classList.add('listening');
-  $dot.className = 'logo-dot listening';
+  try {
+    state.recognition.start();
+    state.isListening = true;
+    $mic.classList.add('listening');
+    $dot.className = 'logo-dot listening';
+    setFaceState('listening');
+  } catch(e) { /* already started */ }
 }
 
 function stopListening() {
@@ -515,224 +810,212 @@ function stopListening() {
   $mic.classList.remove('listening');
   if (!state.isThinking && !state.isSpeaking) {
     $dot.className = 'logo-dot';
+    setFaceState('idle');
   }
   try { state.recognition?.stop(); } catch(e) {}
 }
 
-// ── Speech Synthesis (TTS) ─────────────────────────────
-function speak(text) {
-  if (!text) return;
-  cancelSpeaking();
+// ═══════════════════════════════════════════════════════════
+//  AGENTIC AI SYSTEM
+// ═══════════════════════════════════════════════════════════
+const AGENT_SYSTEM_PROMPT = `You are ZARA, an advanced AI personal assistant with a Jarvis-like personality. You are proactive, intelligent, and capable of complex reasoning.
 
-  const utter = new SpeechSynthesisUtterance(text);
-  utter.rate = 1.0;
-  utter.pitch = 1.0;
+CAPABILITIES:
+- You have access to real-time web search, calculations, and knowledge retrieval
+- You can break down complex tasks into steps and execute them systematically
+- You remember context from the entire conversation
+- You proactively offer relevant information and suggestions
 
-  if (state.voiceName) {
-    const voice = state.synthesis.getVoices().find(v => v.name === state.voiceName);
-    if (voice) utter.voice = voice;
-  }
+PERSONALITY:
+- Confident and precise, like Tony Stark's JARVIS
+- Speak in clear, concise sentences optimized for voice delivery
+- Never use markdown, code blocks, bullet lists, or special formatting
+- Never say "as an AI" or "certainly" or "I'd be happy to"
+- Be direct. Answer what was asked, then add value
+- If you need to do calculations, do them mentally and state the result
+- If asked about real-time info (weather, news, stocks), say you can search for it and provide your best knowledge
+- Keep responses under 3 sentences unless the topic requires depth
+- Use natural conversational language, not robotic phrasing
 
-  utter.onstart = () => {
-    state.isSpeaking = true;
-    $mic.classList.add('speaking');
-    $dot.className = 'logo-dot speaking';
-  };
-  utter.onend = () => {
-    state.isSpeaking = false;
-    $mic.classList.remove('speaking');
-    $dot.className = 'logo-dot';
-  };
-  utter.onerror = () => {
-    state.isSpeaking = false;
-    $mic.classList.remove('speaking');
-    $dot.className = 'logo-dot';
-  };
+TOOL USE:
+When you need to take action, describe it in this format:
+[TOOL: search | query: "what the user wants to know"]
+Then provide your answer based on what you know.
 
-  state.synthesis.speak(utter);
-}
+For calculations:
+[TOOL: calculate | expression: "the math"]
+Then state the result conversationally.
 
-function cancelSpeaking() {
-  state.synthesis.cancel();
-  state.isSpeaking = false;
-  $mic.classList.remove('speaking');
-}
+Remember: You are speaking aloud to the user. Every response will be read by text-to-speech. Write for the ear, not the eye.`;
 
-function populateVoices() {
-  const loadVoices = () => {
-    const voices = state.synthesis.getVoices();
-    const $sel = document.getElementById('setVoice');
-    $sel.innerHTML = '<option value="">Default</option>';
-    voices.forEach(v => {
-      const opt = document.createElement('option');
-      opt.value = v.name;
-      opt.textContent = v.name;
-      $sel.appendChild(opt);
-    });
-    if (state.voiceName) $sel.value = state.voiceName;
-  };
-  loadVoices();
-  state.synthesis.onvoiceschanged = loadVoices;
-}
-
-// ── Chat (calls OpenRouter directly) ────────────────────
-async function sendMessage(text) {
-  if (!text.trim()) return;
-
-  // Check quit
-  if (['goodbye', 'end voice mode', 'hang up', 'quit'].includes(text.toLowerCase().trim())) {
-    showMsg('user', text);
-    endSession();
-    return;
-  }
-
-  showMsg('user', text);
-  state.messages.push({ role: 'user', content: text });
-
-  // Ensure session exists in Supabase (if connected)
-  await ensureSession();
-
-  // Thinking state
-  state.isThinking = true;
-  $mic.classList.add('thinking');
-  $dot.className = 'logo-dot thinking';
-
-  const $typing = showMsg('assistant', '<span class="typing-dots"></span>');
-
-  try {
-    const startMs = Date.now();
-    const reply = await callOpenRouter(state.messages, state.model);
-    const latency = Date.now() - startMs;
-
-    // Update typing indicator with actual text
-    $typing.innerHTML = escapeHtml(reply);
-
-    state.messages.push({ role: 'assistant', content: reply });
-
-    // Save to Supabase (if connected)
-    saveTurn(text, reply, latency);
-
-    // Speak it
-    speak(reply);
-
-  } catch (e) {
-    $typing.innerHTML = 'Sorry, something went wrong: ' + escapeHtml(e.message);
-    console.error('[vl] Chat error:', e);
-  } finally {
-    state.isThinking = false;
-    $mic.classList.remove('thinking');
-    if (!state.isSpeaking) $dot.className = 'logo-dot';
-    scrollChat();
-  }
-}
-
-async function callOpenRouter(messages, model) {
-  const systemMsg = { role: 'system', content: VOICE_SYSTEM_PROMPT };
+// ── OpenRouter API ──
+async function callOpenRouter(messages) {
+  const systemMsg = { role: 'system', content: AGENT_SYSTEM_PROMPT };
   const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer ' + state.openRouterKey,
-      'HTTP-Referer': 'https://voice-line.local',
-      'X-Title': 'Voice Line',
+      'HTTP-Referer': 'https://zara-ai.app',
+      'X-Title': 'ZARA AI Assistant',
     },
     body: JSON.stringify({
-      model: model,
+      model: state.model,
       messages: [systemMsg, ...messages],
       max_tokens: 1024,
+      temperature: 0.7,
     }),
   });
 
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
-    throw new Error(err.error?.message || `HTTP ${resp.status}`);
+    throw new Error(err.error?.message || 'HTTP ' + resp.status);
   }
 
   const data = await resp.json();
   return data.choices?.[0]?.message?.content || 'No response.';
 }
 
-const VOICE_SYSTEM_PROMPT = `
-You are a voice assistant called Voice Line. Follow these rules strictly:
-1. Write for the ear: short conversational sentences, natural language.
-2. No markdown, no code blocks, no bullet lists.
-3. If asked about code, describe it in plain words, do not read syntax aloud.
-4. Be concise. One idea per sentence.
-5. If you need to recommend something, give one or two options, not a long list.
-6. Never say things like 'certainly' or 'as an AI'. Just answer directly.
-`;
+// ── Process tool calls from response ──
+function processToolCalls(text) {
+  const toolRegex = /\[TOOL:\s*(\w+)\s*\|\s*(\w+):\s*"([^"]*)"\]/g;
+  let match;
+  const tools = [];
+  let cleanText = text;
+  while ((match = toolRegex.exec(text)) !== null) {
+    tools.push({ type: match[1], key: match[2], value: match[3] });
+  }
+  // Remove tool tags from spoken text
+  cleanText = text.replace(/\[TOOL:[^\]]*\]/g, '').trim();
+  return { tools, cleanText };
+}
 
-// ── Supabase DB helpers ────────────────────────────────
+// ═══════════════════════════════════════════════════════════
+//  CHAT LOGIC
+// ═══════════════════════════════════════════════════════════
+async function sendMessage(text) {
+  if (!text.trim() || state.isThinking) return;
+
+  if (['goodbye', 'end voice mode', 'hang up', 'quit', 'stop'].includes(text.toLowerCase().trim())) {
+    showMsg('user', text);
+    cancelSpeaking();
+    showMsg('system', 'Session ended. Tap mic or type to start again.');
+    state.messages = [];
+    return;
+  }
+
+  // Unlock TTS on first interaction
+  unlockTTS();
+
+  showMsg('user', text);
+  state.messages.push({ role: 'user', content: text });
+  $empty.classList.remove('visible');
+
+  await ensureSession();
+
+  // Thinking state
+  state.isThinking = true;
+  $mic.classList.add('thinking');
+  $dot.className = 'logo-dot thinking';
+  setFaceState('thinking');
+
+  const $typing = showMsg('assistant', '<span class="typing-dots"><span></span><span></span><span></span></span>');
+
+  try {
+    const startMs = Date.now();
+    const rawReply = await callOpenRouter(state.messages);
+    const latency = Date.now() - startMs;
+
+    const { tools, cleanText } = processToolCalls(rawReply);
+
+    // Show tool calls as separate messages
+    tools.forEach(t => {
+      showMsg('tool', `${t.type.toUpperCase()}: ${t.value}`);
+    });
+
+    // Update assistant message
+    $typing.innerHTML = escapeHtml(cleanText);
+    state.messages.push({ role: 'assistant', content: rawReply });
+
+    saveTurn(text, rawReply, latency);
+
+    // SPEAK the response — this is the critical fix
+    if (cleanText) {
+      speak(cleanText);
+    }
+
+  } catch (e) {
+    $typing.innerHTML = 'Connection error. Check your API key in settings.';
+    $typing.style.color = 'var(--red)';
+    $dot.className = 'logo-dot error';
+    console.error('[zara] Chat error:', e);
+  } finally {
+    state.isThinking = false;
+    $mic.classList.remove('thinking');
+    if (!state.isSpeaking) {
+      $dot.className = 'logo-dot';
+      setFaceState('idle');
+    }
+    scrollChat();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SUPABASE
+// ═══════════════════════════════════════════════════════════
+async function initSupabase() {
+  if (!state.supabaseUrl || !state.supabaseKey) return;
+  try {
+    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+    state.supabase = createClient(state.supabaseUrl, state.supabaseKey);
+    console.log('[zara] Supabase connected');
+  } catch (e) {
+    console.warn('[zara] Supabase init failed:', e);
+  }
+}
+
 async function ensureSession() {
-  if (state.sessionId) return;
+  if (state.sessionId || !state.supabase) return;
   state.sessionId = crypto.randomUUID();
   try {
-    await state.supabase.from('voice_sessions').insert({
-      id: state.sessionId,
-      status: 'active',
-      turn_count: 0,
-    });
-  } catch (e) {
-    console.warn('[vl] create session error:', e);
-  }
+    await state.supabase.from('voice_sessions').insert({ id: state.sessionId, status: 'active', turn_count: 0 });
+  } catch (e) { console.warn('[zara] session error:', e); }
 }
 
 async function saveTurn(userText, assistantText, latencyMs) {
+  if (!state.supabase || !state.sessionId) return;
   try {
     await state.supabase.from('voice_turns').insert({
-      session_id: state.sessionId,
-      user_text: userText,
-      assistant_text: assistantText,
-      model: state.model,
-      latency_ms: latencyMs,
+      session_id: state.sessionId, user_text: userText, assistant_text: assistantText,
+      model: state.model, latency_ms: latencyMs,
     });
-  } catch (e) {
-    console.warn('[vl] save turn error:', e);
-  }
-}
-
-async function endSession() {
-  if (!state.sessionId) return;
-  try {
     await state.supabase.from('voice_sessions').update({
-      status: 'ended',
-      ended_at: new Date().toISOString(),
+      turn_count: state.messages.filter(m => m.role === 'user').length
     }).eq('id', state.sessionId);
-  } catch (e) {}
-  state.sessionId = null;
-  state.messages = [];
-  $chat.innerHTML = '';
-  renderEmptyState();
-  cancelSpeaking();
+  } catch (e) { console.warn('[zara] save error:', e); }
 }
 
 async function loadSessions() {
   if (!state.supabase) return;
   try {
-    const { data } = await state.supabase
-      .from('voice_sessions')
-      .select('id, started_at, turn_count')
-      .order('started_at', { ascending: false })
-      .limit(20);
+    const { data } = await state.supabase.from('voice_sessions').select('id, started_at, turn_count')
+      .order('started_at', { ascending: false }).limit(20);
     renderHistory(data || []);
-  } catch (e) {
-    console.warn('[vl] load sessions error:', e);
-  }
+  } catch (e) { console.warn('[zara] load sessions:', e); }
 }
 
 async function loadSessionTurns(sessionId) {
   if (!state.supabase) return;
   try {
-    const { data } = await state.supabase
-      .from('voice_turns')
-      .select('user_text, assistant_text')
-      .eq('session_id', sessionId)
-      .order('created_at', { ascending: true });
-    if (data && data.length) {
+    const { data } = await state.supabase.from('voice_turns').select('user_text, assistant_text')
+      .eq('session_id', sessionId).order('created_at', { ascending: true });
+    if (data?.length) {
       $chat.innerHTML = '';
+      $empty.classList.remove('visible');
       data.forEach(t => {
+        const { cleanText } = processToolCalls(t.assistant_text);
         showMsg('user', t.user_text);
-        showMsg('assistant', escapeHtml(t.assistant_text));
+        showMsg('assistant', escapeHtml(cleanText));
       });
       state.sessionId = sessionId;
       state.messages = data.flatMap(t => [
@@ -740,12 +1023,12 @@ async function loadSessionTurns(sessionId) {
         { role: 'assistant', content: t.assistant_text },
       ]);
     }
-  } catch (e) {
-    console.warn('[vl] load turns error:', e);
-  }
+  } catch (e) { console.warn('[zara] load turns:', e); }
 }
 
-// ── UI helpers ─────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
+//  UI HELPERS
+// ═══════════════════════════════════════════════════════════
 function showMsg(role, content) {
   if ($chat.querySelector('.empty-state')) $chat.innerHTML = '';
   const div = document.createElement('div');
@@ -754,37 +1037,6 @@ function showMsg(role, content) {
   $chat.appendChild(div);
   scrollChat();
   return div;
-}
-
-function renderEmptyState() {
-  $chat.innerHTML = `
-    <div class="empty-state">
-      <div class="empty-icon">&#x1F3A4;</div>
-      <div class="empty-title">Voice Line</div>
-      <div class="empty-sub">Hold the mic button to talk, or type a message below.</div>
-    </div>`;
-}
-
-function renderHistory(sessions) {
-  if (!sessions.length) {
-    $historyList.innerHTML = '<p style="color:var(--text-dim);text-align:center;padding:20px">No sessions yet.</p>';
-    return;
-  }
-  $historyList.innerHTML = sessions.map(s => {
-    const d = new Date(s.started_at);
-    const dateStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-    return `<div class="history-item" data-id="${s.id}">
-      <div class="history-date">${dateStr}</div>
-      <div class="history-meta">${s.turn_count || 0} turns</div>
-    </div>`;
-  }).join('');
-
-  $historyList.querySelectorAll('.history-item').forEach(el => {
-    el.onclick = () => {
-      loadSessionTurns(el.dataset.id);
-      closePanel('history');
-    };
-  });
 }
 
 function scrollChat() {
@@ -802,33 +1054,47 @@ function updateModelTag() {
   $modelTag.textContent = short;
 }
 
-// ── Panel helpers ──────────────────────────────────────
+function renderHistory(sessions) {
+  const $list = document.getElementById('historyList');
+  if (!sessions.length) {
+    $list.innerHTML = '<p style="color:var(--text-dim);text-align:center;padding:20px;font-size:13px">No sessions yet.</p>';
+    return;
+  }
+  $list.innerHTML = sessions.map(s => {
+    const d = new Date(s.started_at);
+    const ds = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    return `<div class="history-item" data-id="${s.id}"><div class="history-date">${ds}</div><div class="history-meta">${s.turn_count || 0} turns</div></div>`;
+  }).join('');
+  $list.querySelectorAll('.history-item').forEach(el => {
+    el.onclick = () => { loadSessionTurns(el.dataset.id); closePanel('history'); };
+  });
+}
+
+// ── Panels ──
 function openPanel(name) {
-  const panel = name === 'settings' ? $settingsPanel : $historyPanel;
-  const overlay = name === 'settings' ? $settingsOverlay : $historyOverlay;
-  panel.classList.add('open');
-  overlay.classList.add('open');
+  document.getElementById(name + 'Panel').classList.add('open');
+  document.getElementById(name + 'Overlay').classList.add('open');
   if (name === 'history') loadSessions();
 }
-
 function closePanel(name) {
-  const panel = name === 'settings' ? $settingsPanel : $historyPanel;
-  const overlay = name === 'settings' ? $settingsOverlay : $historyOverlay;
-  panel.classList.remove('open');
-  overlay.classList.remove('open');
+  document.getElementById(name + 'Panel').classList.remove('open');
+  document.getElementById(name + 'Overlay').classList.remove('open');
 }
 
-// ── Event Listeners ────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
+//  EVENT LISTENERS
+// ═══════════════════════════════════════════════════════════
 function setupListeners() {
-  // Mic: push-to-talk (hold to record)
+  // Mic: hold to talk
   let held = false;
-  $mic.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    held = true;
-    startListening();
-  });
+  $mic.addEventListener('pointerdown', (e) => { e.preventDefault(); held = true; startListening(); });
   $mic.addEventListener('pointerup', () => { held = false; });
-  $mic.addEventListener('pointerleave', () => { if (held) { held = false; } });
+  $mic.addEventListener('pointerleave', () => { if (held) held = false; });
+  // Tap mic to toggle (alternative for accessibility)
+  $mic.addEventListener('click', () => {
+    if (state.isListening) stopListening();
+    else if (!state.isThinking && !state.isSpeaking) startListening();
+  });
 
   // Text input
   $input.addEventListener('keydown', (e) => {
@@ -838,9 +1104,12 @@ function setupListeners() {
     }
   });
 
+  // Stop button
+  $stopBtn.addEventListener('click', () => { cancelSpeaking(); setFaceState('idle'); });
+
   // Settings
-  $settingsBtn.onclick = () => openPanel('settings');
-  $settingsOverlay.onclick = () => closePanel('settings');
+  document.getElementById('settingsBtn').onclick = () => openPanel('settings');
+  document.getElementById('settingsOverlay').onclick = () => closePanel('settings');
   document.getElementById('settingsCancel').onclick = () => closePanel('settings');
   document.getElementById('settingsSave').onclick = () => {
     state.openRouterKey = document.getElementById('setOpenRouterKey').value.trim();
@@ -848,35 +1117,57 @@ function setupListeners() {
     state.supabaseKey = document.getElementById('setSupabaseKey').value.trim();
     state.model = document.getElementById('setModel').value;
     state.voiceName = document.getElementById('setVoice').value;
-
     localStorage.setItem('vl_openRouterKey', state.openRouterKey);
     localStorage.setItem('vl_supabaseUrl', state.supabaseUrl);
     localStorage.setItem('vl_supabaseKey', state.supabaseKey);
     localStorage.setItem('vl_model', state.model);
     localStorage.setItem('vl_voiceName', state.voiceName);
-
     updateModelTag();
     initSupabase();
     closePanel('settings');
+    showMsg('system', 'Settings saved.');
   };
 
   // History
-  $historyBtn.onclick = () => openPanel('history');
-  $historyOverlay.onclick = () => closePanel('history');
+  document.getElementById('historyBtn').onclick = () => openPanel('history');
+  document.getElementById('historyOverlay').onclick = () => closePanel('history');
   document.getElementById('historyClose').onclick = () => closePanel('history');
   document.getElementById('newChatBtn').onclick = () => {
-    endSession();
+    cancelSpeaking();
+    state.messages = [];
+    state.sessionId = null;
+    $chat.innerHTML = '';
+    $empty.classList.add('visible');
     closePanel('history');
   };
 
-  // Pre-fill settings
+  // Pre-fill settings fields
   document.getElementById('setOpenRouterKey').value = state.openRouterKey;
   document.getElementById('setSupabaseUrl').value = state.supabaseUrl;
   document.getElementById('setSupabaseKey').value = state.supabaseKey;
   document.getElementById('setModel').value = state.model;
 }
 
-// ── Boot ───────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
+//  BOOT
+// ═══════════════════════════════════════════════════════════
+function init() {
+  populateVoices();
+  updateModelTag();
+  setupSpeechRecognition();
+  setupListeners();
+  initSupabase();
+
+  // Welcome message
+  setTimeout(() => {
+    showMsg('system', 'ZARA is online. Hold the mic or type to begin.');
+    // Auto-greet with voice after a short delay
+    setTimeout(() => {
+      speak('ZARA online. How can I help you today?');
+    }, 500);
+  }, 300);
+}
+
 init();
 </script>
 </body>

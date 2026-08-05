@@ -344,8 +344,14 @@
   <div class="panel-handle"></div>
   <h2>Settings</h2>
   <div class="field">
-    <label>Supabase Project URL</label>
+    <label>OpenRouter API Key</label>
+    <input type="text" id="setOpenRouterKey" placeholder="sk-or-v1-...">
+    <div class="hint">Required. Get one at openrouter.ai/keys</div>
+  </div>
+  <div class="field">
+    <label>Supabase Project URL (optional)</label>
     <input type="url" id="setSupabaseUrl" placeholder="https://xxxxx.supabase.co">
+    <div class="hint">For history sync across devices</div>
   </div>
   <div class="field">
     <label>Supabase Anon Key</label>
@@ -393,6 +399,7 @@ if ('serviceWorker' in navigator) {
 <script>
 // ── State ──────────────────────────────────────────────
 const state = {
+  openRouterKey: localStorage.getItem('vl_openRouterKey') || '',
   supabaseUrl: localStorage.getItem('vl_supabaseUrl') || '',
   supabaseKey: localStorage.getItem('vl_supabaseKey') || '',
   model: localStorage.getItem('vl_model') || 'google/gemma-4-26b-a4b-it:free',
@@ -427,10 +434,14 @@ function init() {
   updateModelTag();
   renderEmptyState();
 
+  if (state.openRouterKey) {
+    showMsg('system', 'Ready. Hold the mic to talk, or type below.');
+  } else {
+    showMsg('system', 'Tap the gear icon to add your OpenRouter API key to get started.');
+  }
+
   if (state.supabaseUrl && state.supabaseKey) {
     initSupabase();
-  } else {
-    showMsg('system', 'Tap the gear icon to connect your Supabase project. Open the chat on your PC first to set up the Edge Function.');
   }
 
   setupSpeechRecognition();
@@ -564,7 +575,7 @@ function populateVoices() {
   state.synthesis.onvoiceschanged = loadVoices;
 }
 
-// ── Chat via Edge Function ─────────────────────────────
+// ── Chat (calls OpenRouter directly) ────────────────────
 async function sendMessage(text) {
   if (!text.trim()) return;
 
@@ -575,16 +586,10 @@ async function sendMessage(text) {
     return;
   }
 
-  // If no Supabase, show error
-  if (!state.supabase) {
-    showMsg('system', 'Connect Supabase in settings first.');
-    return;
-  }
-
   showMsg('user', text);
   state.messages.push({ role: 'user', content: text });
 
-  // Ensure session exists
+  // Ensure session exists in Supabase (if connected)
   await ensureSession();
 
   // Thinking state
@@ -596,18 +601,7 @@ async function sendMessage(text) {
 
   try {
     const startMs = Date.now();
-    const { data, error } = await state.supabase.functions.invoke('chat', {
-      body: {
-        messages: state.messages,
-        model: state.model,
-        stream: false,
-      }
-    });
-
-    if (error) throw new Error(error.message || JSON.stringify(error));
-    if (data.error) throw new Error(data.error);
-
-    const reply = data.choices?.[0]?.message?.content || 'No response.';
+    const reply = await callOpenRouter(state.messages, state.model);
     const latency = Date.now() - startMs;
 
     // Update typing indicator with actual text
@@ -615,7 +609,7 @@ async function sendMessage(text) {
 
     state.messages.push({ role: 'assistant', content: reply });
 
-    // Save to DB
+    // Save to Supabase (if connected)
     saveTurn(text, reply, latency);
 
     // Speak it
@@ -631,6 +625,42 @@ async function sendMessage(text) {
     scrollChat();
   }
 }
+
+async function callOpenRouter(messages, model) {
+  const systemMsg = { role: 'system', content: VOICE_SYSTEM_PROMPT };
+  const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + state.openRouterKey,
+      'HTTP-Referer': 'https://voice-line.local',
+      'X-Title': 'Voice Line',
+    },
+    body: JSON.stringify({
+      model: model,
+      messages: [systemMsg, ...messages],
+      max_tokens: 1024,
+    }),
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error?.message || `HTTP ${resp.status}`);
+  }
+
+  const data = await resp.json();
+  return data.choices?.[0]?.message?.content || 'No response.';
+}
+
+const VOICE_SYSTEM_PROMPT = `
+You are a voice assistant called Voice Line. Follow these rules strictly:
+1. Write for the ear: short conversational sentences, natural language.
+2. No markdown, no code blocks, no bullet lists.
+3. If asked about code, describe it in plain words, do not read syntax aloud.
+4. Be concise. One idea per sentence.
+5. If you need to recommend something, give one or two options, not a long list.
+6. Never say things like 'certainly' or 'as an AI'. Just answer directly.
+`;
 
 // ── Supabase DB helpers ────────────────────────────────
 async function ensureSession() {
@@ -813,11 +843,13 @@ function setupListeners() {
   $settingsOverlay.onclick = () => closePanel('settings');
   document.getElementById('settingsCancel').onclick = () => closePanel('settings');
   document.getElementById('settingsSave').onclick = () => {
+    state.openRouterKey = document.getElementById('setOpenRouterKey').value.trim();
     state.supabaseUrl = document.getElementById('setSupabaseUrl').value.trim();
     state.supabaseKey = document.getElementById('setSupabaseKey').value.trim();
     state.model = document.getElementById('setModel').value;
     state.voiceName = document.getElementById('setVoice').value;
 
+    localStorage.setItem('vl_openRouterKey', state.openRouterKey);
     localStorage.setItem('vl_supabaseUrl', state.supabaseUrl);
     localStorage.setItem('vl_supabaseKey', state.supabaseKey);
     localStorage.setItem('vl_model', state.model);
@@ -838,6 +870,7 @@ function setupListeners() {
   };
 
   // Pre-fill settings
+  document.getElementById('setOpenRouterKey').value = state.openRouterKey;
   document.getElementById('setSupabaseUrl').value = state.supabaseUrl;
   document.getElementById('setSupabaseKey').value = state.supabaseKey;
   document.getElementById('setModel').value = state.model;

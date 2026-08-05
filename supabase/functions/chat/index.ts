@@ -32,7 +32,7 @@ Deno.serve(async (req: Request) => {
 
     const apiKey = Deno.env.get("OPENROUTER_API_KEY");
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: "OpenRouter API key not configured" }), {
+      return new Response(JSON.stringify({ error: "OPENROUTER_API_KEY secret not set. Run: supabase secrets set OPENROUTER_API_KEY=sk-or-v1-..." }), {
         status: 500,
       });
     }

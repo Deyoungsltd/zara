@@ -1,0 +1,7 @@
+{
+  "name": "zara-voice-line",
+  "private": true,
+  "scripts": {
+    "start": "npx -y serve voice-mobile -s -l ${PORT:-3000}"
+  }
+}

@@ -1,40 +1,54 @@
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-.venv/
-*.egg
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# Environment / secrets
-.env
-.env.local
-voice-config.js
-voice-mobile/voice-config.js
+# dependencies
+node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
 
-# OS
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
 .DS_Store
-Thumbs.db
+*.pem
 
-# Voice signal bus files (runtime only)
-.voice_state
-.voice_waveform
-.voice_loading_pid
-.voice_alert
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
 
-# Download / generated docs
-/download/
+# env files (can opt-in for committing if needed)
+.env*
 
-# Tool results (internal)
-/tool-results/
+# vercel
+.vercel
 
-# Worklog (internal)
-/worklog.md
 
-# Node
-node_modules/
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+local-*
+.claude
+.z-ai-config
+*.log
+dev.log
+dev.out.log
+test
+prompt
 
-# Scripts (build artifacts)
-/scripts/
-
-# Skills (internal tooling)
+server.log
+# Skills directory
 /skills/

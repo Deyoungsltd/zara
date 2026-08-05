@@ -1,0 +1,92 @@
+const fs = require("fs");
+const { Document, Packer, Paragraph, TextRun, AlignmentType, Table, TableRow, TableCell, WidthType, ShadingType, BorderStyle, TableLayoutType } = require("docx");
+
+const NB = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" };
+const noBorders = { top: NB, bottom: NB, left: NB, right: NB };
+const allNoBorders = { top: NB, bottom: NB, left: NB, right: NB, insideHorizontal: NB, insideVertical: NB };
+const ACCENT = "D4875A";
+const HEAD_BG = "1A2330";
+const TEXT_COLOR = "000000";
+
+function section(text) {
+  return new Paragraph({ spacing: { before: 320, after: 120 }, children: [new TextRun({ text, bold: true, size: 28, color: HEAD_BG, font: { ascii: "Times New Roman" } })] });
+}
+function sub(text) {
+  return new Paragraph({ spacing: { before: 200, after: 80 }, children: [new TextRun({ text, bold: true, size: 24, color: HEAD_BG, font: { ascii: "Times New Roman" } })] });
+}
+function body(text) {
+  return new Paragraph({ spacing: { line: 312, after: 60 }, children: [new TextRun({ text, size: 22, color: TEXT_COLOR, font: { ascii: "Times New Roman" } })] });
+}
+function kbRow(keys, desc, i) {
+  return new TableRow({
+    children: [
+      new TableCell({ width: { size: 35, type: WidthType.PERCENTAGE }, shading: i % 2 === 0 ? { type: ShadingType.CLEAR, fill: "F8F0EB" } : { type: ShadingType.CLEAR, fill: "FFFFFF" }, borders: noBorders, margins: { top: 50, bottom: 50, left: 120, right: 120 }, children: [new Paragraph({ children: [new TextRun({ text: keys, size: 21, font: { ascii: "Courier New", eastAsia: "monospace" }, color: TEXT_COLOR })] })] }),
+      new TableCell({ width: { size: 65, type: WidthType.PERCENTAGE }, shading: i % 2 === 0 ? { type: ShadingType.CLEAR, fill: "F8F0EB" } : { type: ShadingType.CLEAR, fill: "FFFFFF" }, borders: noBorders, margins: { top: 50, bottom: 50, left: 120, right: 120 }, children: [new Paragraph({ children: [new TextRun({ text: desc, size: 21, font: { ascii: "Times New Roman" }, color: TEXT_COLOR })] })] }),
+    ],
+  });
+}
+
+const doc = new Document({
+  styles: { default: { document: { run: { font: { ascii: "Times New Roman" }, size: 22, color: TEXT_COLOR }, paragraph: { spacing: { line: 312 } } } } },
+  sections: [{
+    properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 1440, bottom: 1440, left: 1701, right: 1417 } } },
+    children: [
+      new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 100 }, children: [new TextRun({ text: "Voice Line — Controls Cheat Sheet", bold: true, size: 36, color: HEAD_BG, font: { ascii: "Times New Roman" } })] }),
+      new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 400 }, children: [new TextRun({ text: "Quick reference for the Z.ai Voice Assistant & Visualizer", size: 22, color: "808080", font: { ascii: "Times New Roman" } })] }),
+
+      section("Voice Line Controls"),
+      new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, layout: TableLayoutType.FIXED, borders: allNoBorders, rows: [
+        new TableRow({ children: [new TableCell({ width: { size: 35, type: WidthType.PERCENTAGE }, shading: { type: ShadingType.CLEAR, fill: ACCENT }, borders: noBorders, margins: { top: 50, bottom: 50, left: 120, right: 120 }, children: [new Paragraph({ children: [new TextRun({ text: "Key / Action", bold: true, size: 21, color: "FFFFFF", font: { ascii: "Times New Roman" } })] })] }), new TableCell({ width: { size: 65, type: WidthType.PERCENTAGE }, shading: { type: ShadingType.CLEAR, fill: ACCENT }, borders: noBorders, margins: { top: 50, bottom: 50, left: 120, right: 120 }, children: [new Paragraph({ children: [new TextRun({ text: "Description", bold: true, size: 21, color: "FFFFFF", font: { ascii: "Times New Roman" } })] })] })] }),
+        kbRow("Hold Alt+R (default)", "Open microphone and start recording. Release to send for transcription.", 0),
+        kbRow("Tap Alt+R (< 250ms)", "Ignored. Prevents accidental triggers from key bumps.", 1),
+        kbRow("Alt+R while speaking", "Interrupts playback immediately and opens mic.", 2),
+        kbRow("Type in terminal", "Sends typed text to the same handler as speech. Interrupts if speaking.", 3),
+        kbRow("Ctrl+C", "Hard exit. Closes session immediately.", 4),
+        kbRow("\"goodbye\" / \"hang up\"", "Quit phrases end the session gracefully.", 5),
+      ] }),
+
+      section("Voice Line Flags"),
+      body("--open-mic : Use continuous listening with webrtcvad instead of push-to-talk. Requires microphone permission. Discards utterances under 240ms of speech."),
+      body("VOICE_LINE_HOTKEY : Change the PTT key. Default is alt_r. Set as an environment variable."),
+      body("ELEVENLABS_API_KEY : Set this to enable ElevenLabs premium TTS. Kokoro is used as automatic fallback."),
+      body("ZAI_API_KEY : Your Z.ai API key for the brain module."),
+      body("ZAI_BASE_URL : Override the Z.ai API base URL (default: https://api.z.ai/v1)."),
+      body("VOICE_LINE_BUS_DIR : Override the directory where signal bus files are read (for the visualizer server)."),
+
+      section("Visualizer Controls"),
+      new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, layout: TableLayoutType.FIXED, borders: allNoBorders, rows: [
+        new TableRow({ children: [new TableCell({ width: { size: 35, type: WidthType.PERCENTAGE }, shading: { type: ShadingType.CLEAR, fill: ACCENT }, borders: noBorders, margins: { top: 50, bottom: 50, left: 120, right: 120 }, children: [new Paragraph({ children: [new TextRun({ text: "Key / Action", bold: true, size: 21, color: "FFFFFF", font: { ascii: "Times New Roman" } })] })] }), new TableCell({ width: { size: 65, type: WidthType.PERCENTAGE }, shading: { type: ShadingType.CLEAR, fill: ACCENT }, borders: noBorders, margins: { top: 50, bottom: 50, left: 120, right: 120 }, children: [new Paragraph({ children: [new TextRun({ text: "Description", bold: true, size: 21, color: "FFFFFF", font: { ascii: "Times New Roman" } })] })] })] }),
+        kbRow("F", "Toggle FPS counter (top-left corner).", 0),
+        kbRow("Space", "Start cinematic flythrough. Press again to bail out.", 1),
+        kbRow("F11", "Browser fullscreen mode.", 2),
+      ] }),
+
+      section("Visualizer URLs"),
+      body("Live: http://127.0.0.1:8777"),
+      body("Mock: http://127.0.0.1:8778"),
+      body("Mock state: http://127.0.0.1:8778/?mockstate=speaking"),
+      body("Screenshot: http://127.0.0.1:8777/?shot=speaking&t=1200"),
+
+      section("Visualizer States"),
+      body("idle: Calm rain, dim city lights, breathing pulse. The resting state."),
+      body("listening: Buildings brighten, rain intensifies, scanning line effect. You are being heard."),
+      body("thinking: City lights flicker faster, matrix-style data rain between buildings. AI is processing."),
+      body("speaking: Full energy — neon signs blaze, equalizer bars, wind-driven rain. The assistant is talking."),
+      body("alert: Red/orange emergency pulse. All lights flash. Used for system warnings."),
+
+      section("Launch Commands"),
+      body("Voice line: ./run-voice-line.sh"),
+      body("Voice line (open-mic): ./run-voice-line.sh --open-mic"),
+      body("Visualizer: ./launch.sh (starts server + Chrome kiosk)"),
+      body("Mock visualizer: python3 server.py --mock (port 8778)"),
+      body("Install deps: uv sync"),
+
+      section("Architecture"),
+      body("Mic → Whisper (port 2022) → Z.ai Brain → Kokoro TTS (port 8880) → Speakers"),
+      body("Signal bus: .voice_state, .voice_waveform, .voice_loading_pid (read-only by visualizer)"),
+      body("Half-duplex: mic is gated while speaking. No barge-in. Interrupt via hotkey."),
+    ],
+  }]),
+});
+
+Packer.toBuffer(doc).then(buf => { fs.writeFileSync("/home/z/my-project/download/Voice_Line_Cheat_Sheet.docx", buf); console.log("Done"); });

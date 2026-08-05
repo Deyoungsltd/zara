@@ -88,3 +88,24 @@ Work Log:
 
 Stage Summary:
 - Cheat sheet: /home/z/my-project/download/Voice_Line_Cheat_Sheet.docx
+
+---
+Task ID: 6
+Agent: Main
+Task: Migrate from Z.ai to OpenRouter API + add Supabase DB
+
+Work Log:
+- Rewrote brain.py: replaced ZAI_BASE_URL/ZAI_API_KEY with OPENROUTER_BASE_URL/OPENROUTER_API_KEY/OPENROUTER_MODEL env vars, added HTTP-Referer and X-Title headers per OpenRouter spec, default model google/gemini-2.5-flash-preview
+- Created database.py: SupabaseDB class with async wrapper (run_in_executor) for supabase-py, methods for create_session/end_session/save_turn/get_recent_sessions/get_session_turns/save_preference/get_preference, embedded migration SQL with voice_sessions + voice_turns + voice_preferences tables + RLS policies + indexes
+- Exported migration SQL to /home/z/my-project/voice-line/supabase_migration.sql
+- Updated pyproject.toml: bumped to v0.2.0, added supabase>=2.0.0 dependency
+- Updated main.py: imports SupabaseDB, creates db instance, passes to Brain constructor, adds db.init() call before brain warmup with status logging
+- Updated run-voice-line.sh: added env var checks for OPENROUTER_API_KEY and SUPABASE_URL/SUPABASE_ANON_KEY
+- Created .env.example with all required/optional env vars documented
+
+Stage Summary:
+- brain.py now uses OpenRouter API (SSE streaming, compatible with any model)
+- database.py provides full Supabase persistence (sessions, turns, preferences)
+- Supabase is optional: system works without it, all DB calls fail silently
+- Migration SQL ready to paste into Supabase dashboard
+- .env.example documents all configuration

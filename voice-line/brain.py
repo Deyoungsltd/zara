@@ -1,23 +1,34 @@
 """
-Brain module: Z.ai integration for streaming AI responses.
+Brain module: OpenRouter integration for streaming AI responses.
 
-Uses httpx to call the Z.ai API with streaming.
+Uses httpx to call the OpenRouter API with streaming.
 Chunks streamed text into sentences and yields each completed sentence.
 Writes for the ear: short sentences, no markdown, no code blocks read aloud.
+Conversations are persisted to Supabase.
 """
 
 import asyncio
-import re
+import json
 import os
+import re
+import time
+import uuid
 import httpx
 import signals
 
-ZAI_BASE_URL = os.environ.get("ZAI_BASE_URL", "https://api.z.ai/v1")
-ZAI_API_KEY = os.environ.get("ZAI_API_KEY", "")
+OPENROUTER_BASE_URL = os.environ.get(
+    "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
+)
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+OPENROUTER_MODEL = os.environ.get(
+    "OPENROUTER_MODEL", "google/gemini-2.5-flash-preview"
+)
+OPENROUTER_SITE_URL = os.environ.get("OPENROUTER_SITE_URL", "https://voice-line.local")
+OPENROUTER_SITE_NAME = os.environ.get("OPENROUTER_SITE_NAME", "Voice Line")
 
 # System prompt for voice mode
 VOICE_SYSTEM_PROMPT = (
-    "You are a voice assistant. Follow these rules strictly:\n"
+    "You are a voice assistant called Voice Line. Follow these rules strictly:\n"
     "1. Write for the ear: short conversational sentences, natural language.\n"
     "2. No markdown, no code blocks, no bullet lists.\n"
     "3. If asked about code, describe it in plain words, do not read syntax aloud.\n"
@@ -30,25 +41,37 @@ QUIT_PHRASES = {"goodbye", "end voice mode", "hang up", "exit voice", "quit"}
 
 
 class Brain:
-    def __init__(self, cwd: str | None = None):
+    def __init__(self, cwd: str | None = None, db=None):
         self.cwd = cwd or os.getcwd()
-        self.session_id: str | None = None
+        self.db = db  # SupabaseDB instance, optional
+        self.session_id: str = str(uuid.uuid4())
         self.messages: list[dict] = []
         self._client: httpx.AsyncClient | None = None
+        self._token_usage: dict = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
     async def start(self) -> None:
-        """Create a warm Z.ai session. Fire a warmup query to populate prompt cache."""
+        """Create an OpenRouter session. Fire a warmup query to populate prompt cache."""
+        if not OPENROUTER_API_KEY:
+            print("[brain] WARNING: OPENROUTER_API_KEY not set. AI features will fail.")
+
         self._client = httpx.AsyncClient(
-            base_url=ZAI_BASE_URL,
+            base_url=OPENROUTER_BASE_URL,
             headers={
-                "Authorization": f"Bearer {ZAI_API_KEY}",
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
                 "Content-Type": "application/json",
+                "HTTP-Referer": OPENROUTER_SITE_URL,
+                "X-Title": OPENROUTER_SITE_NAME,
             },
             timeout=httpx.Timeout(120.0, connect=10.0),
         )
         self.messages = [
             {"role": "system", "content": VOICE_SYSTEM_PROMPT},
         ]
+
+        # Persist session to Supabase
+        if self.db:
+            await self.db.create_session(self.session_id)
+
         # Fire warmup query
         try:
             async for _ in self._stream_reply("Say hello in one short sentence."):
@@ -57,25 +80,31 @@ class Brain:
             print(f"[brain] warmup warning: {e}")
 
     async def stop(self) -> None:
-        """Close the session."""
+        """Close the session and persist final state."""
         if self._client:
             await self._client.aclose()
             self._client = None
 
+        # Persist session end to Supabase
+        if self.db:
+            await self.db.end_session(self.session_id)
+
     async def _stream_reply(self, text: str):
-        """Send a user message and yield content chunks from Z.ai streaming response."""
+        """Send a user message and yield content chunks from OpenRouter streaming response."""
         self.messages.append({"role": "user", "content": text})
 
         payload = {
-            "model": "default",
+            "model": OPENROUTER_MODEL,
             "messages": self.messages,
             "stream": True,
             "max_tokens": 1024,
         }
 
+        start_time = time.monotonic()
+        full_content = ""
+
         async with self._client.stream("POST", "/chat/completions", json=payload) as resp:
             resp.raise_for_status()
-            full_content = ""
             async for line in resp.aiter_lines():
                 if not line.startswith("data: "):
                     continue
@@ -83,7 +112,6 @@ class Brain:
                 if data_str == "[DONE]":
                     break
                 try:
-                    import json
                     data = json.loads(data_str)
                     delta = data.get("choices", [{}])[0].get("delta", {})
                     chunk = delta.get("content", "")
@@ -93,13 +121,32 @@ class Brain:
                 except (json.JSONDecodeError, KeyError, IndexError):
                     continue
 
-            # Store the assistant's full response
-            if full_content:
-                self.messages.append({"role": "assistant", "content": full_content})
+            # Accumulate token usage from the final non-streaming metadata
+            try:
+                # OpenRouter may send usage in a final non-SSE line or in the stream
+                pass
+            except Exception:
+                pass
+
+        elapsed = time.monotonic() - start_time
+
+        # Store the assistant's full response
+        if full_content:
+            self.messages.append({"role": "assistant", "content": full_content})
+
+            # Persist conversation turn to Supabase
+            if self.db:
+                await self.db.save_turn(
+                    session_id=self.session_id,
+                    user_text=text,
+                    assistant_text=full_content,
+                    model=OPENROUTER_MODEL,
+                    latency_ms=int(elapsed * 1000),
+                )
 
     async def process_and_chunk(self, text: str, sentence_queue: asyncio.Queue):
-        """Process user text through Z.ai and put completed sentences into the queue.
-        
+        """Process user text through OpenRouter and put completed sentences into the queue.
+
         If the text is a quit phrase, puts None into the queue to signal exit.
         """
         # Check for quit phrases

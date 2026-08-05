@@ -8,6 +8,7 @@ from brain import Brain
 from mouth import Mouth, check_kokoro_server
 from ptt import PTTController, OpenMicController
 from ducking import SpotifyDucker
+from database import SupabaseDB
 import signals
 
 OPEN_MIC_MODE = "--open-mic" in sys.argv
@@ -19,7 +20,11 @@ class VoiceLine:
 
     def __init__(self):
         self.ears = Ears()
-        self.brain = Brain(cwd=os.path.dirname(os.path.abspath(__file__)))
+        self.db = SupabaseDB()
+        self.brain = Brain(
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            db=self.db,
+        )
         self.mouth = Mouth(
             use_elevenlabs=bool(os.environ.get("ELEVENLABS_API_KEY"))
         )
@@ -177,8 +182,16 @@ class VoiceLine:
         if not await self.check_services():
             return
 
+        # Initialize Supabase
+        print("[voice-line] Connecting to Supabase...")
+        db_ok = await self.db.init()
+        if db_ok:
+            print("[voice-line]  Supabase: connected")
+        else:
+            print("[voice-line]  Supabase: disabled (set SUPABASE_URL + SUPABASE_ANON_KEY)")
+
         # Start brain (warmup)
-        print("[voice-line] Warming up AI session...")
+        print("[voice-line] Warming up AI session (OpenRouter)...")
         await self.brain.start()
         print("[voice-line] AI session ready.")
 

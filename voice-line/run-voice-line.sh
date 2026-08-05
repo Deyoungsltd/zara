@@ -49,6 +49,20 @@ uv pip install -e . 2>/dev/null || uv sync
 # Activate venv
 source .venv/bin/activate
 
+# Check required env vars (warnings only, not hard failures)
+echo ""
+echo "[check] Environment variables..."
+if [ -z "$OPENROUTER_API_KEY" ]; then
+    echo "  WARNING: OPENROUTER_API_KEY not set. AI will not work."
+else
+    echo "  OPENROUTER_API_KEY: set"
+fi
+if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+    echo "  SUPABASE_URL / SUPABASE_ANON_KEY: not set (DB disabled)"
+else
+    echo "  SUPABASE: configured"
+fi
+
 # Check Whisper server
 echo ""
 echo "[check] Whisper server on port 2022..."

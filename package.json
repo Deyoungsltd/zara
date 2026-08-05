@@ -2,6 +2,6 @@
   "name": "zara-voice-line",
   "private": true,
   "scripts": {
-    "start": "node -e \"const fs=require('fs');const c='window.ZARA_CONFIG='+JSON.stringify({openRouterKey:process.env.OPENROUTER_KEY||'',supabaseUrl:process.env.SUPABASE_URL||'',supabaseKey:process.env.SUPABASE_KEY||'',model:process.env.AI_MODEL||'google/gemma-4-26b-a4b-it:free'})+';';fs.writeFileSync('voice-mobile/voice-config.js',c);\" && npx -y serve voice-mobile -s -l ${PORT:-3000}"
+    "start": "node -e \"const fs=require('fs');const k=process.env.OPENROUTER_KEY||'';const u=process.env.SUPABASE_URL||'';const s=process.env.SUPABASE_KEY||'';const m=process.env.AI_MODEL||'google/gemma-4-26b-a4b-it:free';fs.writeFileSync('voice-mobile/voice-config.js','window.ZARA_CONFIG='+JSON.stringify({openRouterKey:k,supabaseUrl:u,supabaseKey:s,model:m})+';');console.log('Config: key='+(k?'set':'empty')+' supabase='+(u?'set':'empty'));\" && npx -y serve voice-mobile -s -l ${PORT:-3000}"
   }
 }

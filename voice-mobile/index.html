@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0a0f">
+<link rel="manifest" href="manifest.json">
+<title>Voice Line</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #141420;
+    --surface2: #1c1c2e;
+    --accent: #ff6b35;
+    --accent-glow: rgba(255, 107, 53, 0.3);
+    --text: #e8e6e3;
+    --text-dim: #7a7890;
+    --green: #00e676;
+    --red: #ff3d57;
+    --radius: 16px;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* ── Header ────────────────────────────── */
+  header {
+    padding: 12px 20px;
+    padding-top: max(12px, env(safe-area-inset-top));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    background: rgba(10,10,15,0.9);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    z-index: 10;
+  }
+
+  .logo {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .logo-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 12px var(--accent-glow);
+    transition: background 0.3s;
+  }
+  .logo-dot.listening { background: var(--green); box-shadow: 0 0 12px rgba(0,230,118,0.4); }
+  .logo-dot.thinking { background: #ffab40; box-shadow: 0 0 12px rgba(255,171,64,0.4); animation: pulse 1s infinite; }
+  .logo-dot.speaking { background: var(--accent); box-shadow: 0 0 12px var(--accent-glow); animation: pulse 0.6s infinite; }
+
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+  .header-right {
+    display: flex; gap: 12px; align-items: center;
+  }
+  .header-btn {
+    background: none; border: none; color: var(--text-dim); font-size: 20px;
+    cursor: pointer; padding: 4px;
+  }
+  .model-tag {
+    font-size: 11px;
+    color: var(--text-dim);
+    background: var(--surface);
+    padding: 4px 10px;
+    border-radius: 20px;
+     max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ── Chat Area ──────────────────────────── */
+  #chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .msg {
+    max-width: 85%;
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    font-size: 15px;
+    line-height: 1.5;
+    animation: msgIn 0.25s ease-out;
+  }
+  @keyframes msgIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  .msg.user {
+    align-self: flex-end;
+    background: var(--accent);
+    color: #fff;
+    border-bottom-right-radius: 4px;
+  }
+  .msg.assistant {
+    align-self: flex-start;
+    background: var(--surface);
+    border-bottom-left-radius: 4px;
+  }
+  .msg.system {
+    align-self: center;
+    font-size: 12px;
+    color: var(--text-dim);
+    background: none;
+    padding: 4px;
+  }
+
+  .msg .typing-dots::after {
+    content: '...';
+    animation: dots 1.2s steps(4) infinite;
+  }
+  @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
+
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--text-dim);
+    text-align: center;
+    padding: 40px;
+  }
+  .empty-icon { font-size: 48px; opacity: 0.3; }
+  .empty-title { font-size: 18px; font-weight: 600; color: var(--text); }
+  .empty-sub { font-size: 14px; max-width: 260px; }
+
+  /* ── Bottom Control Bar ────────────────── */
+  .controls {
+    padding: 12px 20px;
+    padding-bottom: max(16px, calc(12px + var(--safe-bottom)));
+    border-top: 1px solid rgba(255,255,255,0.06);
+    background: rgba(10,10,15,0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  .controls-inner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  /* Text input */
+  .text-input-wrap {
+    flex: 1;
+    position: relative;
+  }
+  .text-input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 24px;
+    padding: 12px 16px;
+    color: var(--text);
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .text-input:focus { border-color: var(--accent); }
+  .text-input::placeholder { color: var(--text-dim); }
+
+  /* Mic button */
+  .mic-btn {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-size: 24px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s, box-shadow 0.2s, background 0.2s;
+    flex-shrink: 0;
+    position: relative;
+  }
+  .mic-btn:active { transform: scale(0.92); }
+  .mic-btn.listening {
+    background: var(--green);
+    box-shadow: 0 0 0 6px rgba(0,230,118,0.2), 0 0 30px rgba(0,230,118,0.3);
+    animation: micPulse 1.2s infinite;
+  }
+  .mic-btn.speaking {
+    background: var(--accent);
+    box-shadow: 0 0 0 6px var(--accent-glow), 0 0 30px var(--accent-glow);
+    animation: micPulse 0.8s infinite;
+  }
+  .mic-btn.thinking {
+    background: #ffab40;
+    box-shadow: 0 0 0 6px rgba(255,171,64,0.2);
+  }
+  .mic-btn:disabled { opacity: 0.4; pointer-events: none; }
+
+  @keyframes micPulse {
+    0%,100% { box-shadow: 0 0 0 6px rgba(0,230,118,0.15); }
+    50% { box-shadow: 0 0 0 14px rgba(0,230,118,0.05); }
+  }
+
+  /* ── Settings Panel ─────────────────────── */
+  .panel-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+  .panel-overlay.open { opacity: 1; pointer-events: auto; }
+
+  .panel {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--surface);
+    border-radius: 20px 20px 0 0;
+    padding: 20px;
+    padding-bottom: max(24px, calc(20px + var(--safe-bottom)));
+    z-index: 101;
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+    max-height: 80dvh;
+    overflow-y: auto;
+  }
+  .panel.open { transform: translateY(0); }
+
+  .panel-handle {
+    width: 36px; height: 4px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 2px;
+    margin: 0 auto 20px;
+  }
+  .panel h2 { font-size: 18px; margin-bottom: 20px; }
+
+  .field { margin-bottom: 16px; }
+  .field label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .field input, .field select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-size: 14px;
+    outline: none;
+  }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+
+  .field .hint { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+
+  .btn-row { display: flex; gap: 10px; margin-top: 20px; }
+  .btn {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-secondary { background: var(--surface2); color: var(--text); }
+
+  /* ── History Panel ──────────────────────── */
+  .history-item {
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    cursor: pointer;
+  }
+  .history-item:last-child { border-bottom: none; }
+  .history-date { font-size: 12px; color: var(--text-dim); }
+  .history-preview { font-size: 14px; margin-top: 4px; color: var(--text); }
+  .history-meta { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+  /* ── Scrollbar ──────────────────────────── */
+  #chat::-webkit-scrollbar { width: 3px; }
+  #chat::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot" id="statusDot"></div>
+    <span>Voice Line</span>
+  </div>
+  <div class="header-right">
+    <span class="model-tag" id="modelTag">gemma-4:free</span>
+    <button class="header-btn" id="historyBtn" title="History">&#x1D565;</button>
+    <button class="header-btn" id="settingsBtn" title="Settings">&#x2699;</button>
+  </div>
+</header>
+
+<div id="chat"></div>
+
+<div class="controls">
+  <div class="controls-inner">
+    <div class="text-input-wrap">
+      <input type="text" class="text-input" id="textInput" placeholder="Type a message..." autocomplete="off">
+    </div>
+    <button class="mic-btn" id="micBtn" title="Hold to talk">&#x1F3A4;</button>
+  </div>
+</div>
+
+<!-- Settings Panel -->
+<div class="panel-overlay" id="settingsOverlay"></div>
+<div class="panel" id="settingsPanel">
+  <div class="panel-handle"></div>
+  <h2>Settings</h2>
+  <div class="field">
+    <label>Supabase Project URL</label>
+    <input type="url" id="setSupabaseUrl" placeholder="https://xxxxx.supabase.co">
+  </div>
+  <div class="field">
+    <label>Supabase Anon Key</label>
+    <input type="text" id="setSupabaseKey" placeholder="eyJ...">
+  </div>
+  <div class="field">
+    <label>Model</label>
+    <select id="setModel">
+      <option value="google/gemma-4-26b-a4b-it:free">Gemma 4 26B (free)</option>
+      <option value="google/gemma-4-31b-it:free">Gemma 4 31B (free)</option>
+      <option value="meta-llama/llama-4-maverick:free">Llama 4 Maverick (free)</option>
+      <option value="nvidia/nemotron-3-super-120b-a12b:free">Nemotron 3 Super (free)</option>
+    </select>
+    <div class="hint">Paid models require credits on your OpenRouter account</div>
+  </div>
+  <div class="field">
+    <label>TTS Voice</label>
+    <select id="setVoice">
+      <!-- Populated dynamically -->
+    </select>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-secondary" id="settingsCancel">Cancel</button>
+    <button class="btn btn-primary" id="settingsSave">Save</button>
+  </div>
+</div>
+
+<!-- History Panel -->
+<div class="panel-overlay" id="historyOverlay"></div>
+<div class="panel" id="historyPanel">
+  <div class="panel-handle"></div>
+  <h2>Session History</h2>
+  <div id="historyList"></div>
+  <div class="btn-row">
+    <button class="btn btn-secondary" id="newChatBtn">New Chat</button>
+    <button class="btn btn-secondary" id="historyClose">Close</button>
+  </div>
+</div>
+
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+</script>
+<script>
+// ── State ──────────────────────────────────────────────
+const state = {
+  supabaseUrl: localStorage.getItem('vl_supabaseUrl') || '',
+  supabaseKey: localStorage.getItem('vl_supabaseKey') || '',
+  model: localStorage.getItem('vl_model') || 'google/gemma-4-26b-a4b-it:free',
+  voiceName: localStorage.getItem('vl_voiceName') || '',
+  messages: [],       // current session: [{role, content}]
+  sessionId: null,
+  isListening: false,
+  isThinking: false,
+  isSpeaking: false,
+  recognition: null,
+  synthesis: window.speechSynthesis,
+  supabase: null,
+};
+
+// ── DOM refs ───────────────────────────────────────────
+const $chat = document.getElementById('chat');
+const $mic = document.getElementById('micBtn');
+const $input = document.getElementById('textInput');
+const $dot = document.getElementById('statusDot');
+const $modelTag = document.getElementById('modelTag');
+const $settingsBtn = document.getElementById('settingsBtn');
+const $settingsPanel = document.getElementById('settingsPanel');
+const $settingsOverlay = document.getElementById('settingsOverlay');
+const $historyBtn = document.getElementById('historyBtn');
+const $historyPanel = document.getElementById('historyPanel');
+const $historyOverlay = document.getElementById('historyOverlay');
+const $historyList = document.getElementById('historyList');
+
+// ── Init ───────────────────────────────────────────────
+function init() {
+  populateVoices();
+  updateModelTag();
+  renderEmptyState();
+
+  if (state.supabaseUrl && state.supabaseKey) {
+    initSupabase();
+  } else {
+    showMsg('system', 'Tap the gear icon to connect your Supabase project. Open the chat on your PC first to set up the Edge Function.');
+  }
+
+  setupSpeechRecognition();
+  setupListeners();
+}
+
+// ── Supabase ───────────────────────────────────────────
+async function initSupabase() {
+  try {
+    // Load Supabase JS from CDN
+    if (!window.supabase) {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+      document.head.appendChild(script);
+      await new Promise(r => script.onload = r);
+    }
+    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+    state.supabase = createClient(state.supabaseUrl, state.supabaseKey);
+    console.log('[vl] Supabase connected');
+  } catch (e) {
+    console.error('[vl] Supabase init failed:', e);
+    showMsg('system', 'Failed to connect to Supabase. Check your settings.');
+  }
+}
+
+// ── Speech Recognition (STT) ───────────────────────────
+function setupSpeechRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    $mic.disabled = true;
+    showMsg('system', 'Speech recognition not supported in this browser. Use Chrome or Safari.');
+    return;
+  }
+
+  state.recognition = new SR();
+  state.recognition.continuous = false;
+  state.recognition.interimResults = false;
+  state.recognition.lang = 'en-US';
+
+  state.recognition.onresult = (e) => {
+    const transcript = e.results[0][0].transcript.trim();
+    if (transcript) {
+      sendMessage(transcript);
+    }
+  };
+
+  state.recognition.onerror = (e) => {
+    console.warn('[vl] STT error:', e.error);
+    if (e.error !== 'no-speech') {
+      showMsg('system', 'Voice error: ' + e.error);
+    }
+    stopListening();
+  };
+
+  state.recognition.onend = () => {
+    stopListening();
+  };
+}
+
+function startListening() {
+  if (!state.recognition || state.isThinking || state.isSpeaking) return;
+  cancelSpeaking();
+  state.recognition.start();
+  state.isListening = true;
+  $mic.classList.add('listening');
+  $dot.className = 'logo-dot listening';
+}
+
+function stopListening() {
+  state.isListening = false;
+  $mic.classList.remove('listening');
+  if (!state.isThinking && !state.isSpeaking) {
+    $dot.className = 'logo-dot';
+  }
+  try { state.recognition?.stop(); } catch(e) {}
+}
+
+// ── Speech Synthesis (TTS) ─────────────────────────────
+function speak(text) {
+  if (!text) return;
+  cancelSpeaking();
+
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.rate = 1.0;
+  utter.pitch = 1.0;
+
+  if (state.voiceName) {
+    const voice = state.synthesis.getVoices().find(v => v.name === state.voiceName);
+    if (voice) utter.voice = voice;
+  }
+
+  utter.onstart = () => {
+    state.isSpeaking = true;
+    $mic.classList.add('speaking');
+    $dot.className = 'logo-dot speaking';
+  };
+  utter.onend = () => {
+    state.isSpeaking = false;
+    $mic.classList.remove('speaking');
+    $dot.className = 'logo-dot';
+  };
+  utter.onerror = () => {
+    state.isSpeaking = false;
+    $mic.classList.remove('speaking');
+    $dot.className = 'logo-dot';
+  };
+
+  state.synthesis.speak(utter);
+}
+
+function cancelSpeaking() {
+  state.synthesis.cancel();
+  state.isSpeaking = false;
+  $mic.classList.remove('speaking');
+}
+
+function populateVoices() {
+  const loadVoices = () => {
+    const voices = state.synthesis.getVoices();
+    const $sel = document.getElementById('setVoice');
+    $sel.innerHTML = '<option value="">Default</option>';
+    voices.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.name;
+      opt.textContent = v.name;
+      $sel.appendChild(opt);
+    });
+    if (state.voiceName) $sel.value = state.voiceName;
+  };
+  loadVoices();
+  state.synthesis.onvoiceschanged = loadVoices;
+}
+
+// ── Chat via Edge Function ─────────────────────────────
+async function sendMessage(text) {
+  if (!text.trim()) return;
+
+  // Check quit
+  if (['goodbye', 'end voice mode', 'hang up', 'quit'].includes(text.toLowerCase().trim())) {
+    showMsg('user', text);
+    endSession();
+    return;
+  }
+
+  // If no Supabase, show error
+  if (!state.supabase) {
+    showMsg('system', 'Connect Supabase in settings first.');
+    return;
+  }
+
+  showMsg('user', text);
+  state.messages.push({ role: 'user', content: text });
+
+  // Ensure session exists
+  await ensureSession();
+
+  // Thinking state
+  state.isThinking = true;
+  $mic.classList.add('thinking');
+  $dot.className = 'logo-dot thinking';
+
+  const $typing = showMsg('assistant', '<span class="typing-dots"></span>');
+
+  try {
+    const startMs = Date.now();
+    const { data, error } = await state.supabase.functions.invoke('chat', {
+      body: {
+        messages: state.messages,
+        model: state.model,
+        stream: false,
+      }
+    });
+
+    if (error) throw new Error(error.message || JSON.stringify(error));
+    if (data.error) throw new Error(data.error);
+
+    const reply = data.choices?.[0]?.message?.content || 'No response.';
+    const latency = Date.now() - startMs;
+
+    // Update typing indicator with actual text
+    $typing.innerHTML = escapeHtml(reply);
+
+    state.messages.push({ role: 'assistant', content: reply });
+
+    // Save to DB
+    saveTurn(text, reply, latency);
+
+    // Speak it
+    speak(reply);
+
+  } catch (e) {
+    $typing.innerHTML = 'Sorry, something went wrong: ' + escapeHtml(e.message);
+    console.error('[vl] Chat error:', e);
+  } finally {
+    state.isThinking = false;
+    $mic.classList.remove('thinking');
+    if (!state.isSpeaking) $dot.className = 'logo-dot';
+    scrollChat();
+  }
+}
+
+// ── Supabase DB helpers ────────────────────────────────
+async function ensureSession() {
+  if (state.sessionId) return;
+  state.sessionId = crypto.randomUUID();
+  try {
+    await state.supabase.from('voice_sessions').insert({
+      id: state.sessionId,
+      status: 'active',
+      turn_count: 0,
+    });
+  } catch (e) {
+    console.warn('[vl] create session error:', e);
+  }
+}
+
+async function saveTurn(userText, assistantText, latencyMs) {
+  try {
+    await state.supabase.from('voice_turns').insert({
+      session_id: state.sessionId,
+      user_text: userText,
+      assistant_text: assistantText,
+      model: state.model,
+      latency_ms: latencyMs,
+    });
+  } catch (e) {
+    console.warn('[vl] save turn error:', e);
+  }
+}
+
+async function endSession() {
+  if (!state.sessionId) return;
+  try {
+    await state.supabase.from('voice_sessions').update({
+      status: 'ended',
+      ended_at: new Date().toISOString(),
+    }).eq('id', state.sessionId);
+  } catch (e) {}
+  state.sessionId = null;
+  state.messages = [];
+  $chat.innerHTML = '';
+  renderEmptyState();
+  cancelSpeaking();
+}
+
+async function loadSessions() {
+  if (!state.supabase) return;
+  try {
+    const { data } = await state.supabase
+      .from('voice_sessions')
+      .select('id, started_at, turn_count')
+      .order('started_at', { ascending: false })
+      .limit(20);
+    renderHistory(data || []);
+  } catch (e) {
+    console.warn('[vl] load sessions error:', e);
+  }
+}
+
+async function loadSessionTurns(sessionId) {
+  if (!state.supabase) return;
+  try {
+    const { data } = await state.supabase
+      .from('voice_turns')
+      .select('user_text, assistant_text')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: true });
+    if (data && data.length) {
+      $chat.innerHTML = '';
+      data.forEach(t => {
+        showMsg('user', t.user_text);
+        showMsg('assistant', escapeHtml(t.assistant_text));
+      });
+      state.sessionId = sessionId;
+      state.messages = data.flatMap(t => [
+        { role: 'user', content: t.user_text },
+        { role: 'assistant', content: t.assistant_text },
+      ]);
+    }
+  } catch (e) {
+    console.warn('[vl] load turns error:', e);
+  }
+}
+
+// ── UI helpers ─────────────────────────────────────────
+function showMsg(role, content) {
+  if ($chat.querySelector('.empty-state')) $chat.innerHTML = '';
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.innerHTML = content;
+  $chat.appendChild(div);
+  scrollChat();
+  return div;
+}
+
+function renderEmptyState() {
+  $chat.innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">&#x1F3A4;</div>
+      <div class="empty-title">Voice Line</div>
+      <div class="empty-sub">Hold the mic button to talk, or type a message below.</div>
+    </div>`;
+}
+
+function renderHistory(sessions) {
+  if (!sessions.length) {
+    $historyList.innerHTML = '<p style="color:var(--text-dim);text-align:center;padding:20px">No sessions yet.</p>';
+    return;
+  }
+  $historyList.innerHTML = sessions.map(s => {
+    const d = new Date(s.started_at);
+    const dateStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    return `<div class="history-item" data-id="${s.id}">
+      <div class="history-date">${dateStr}</div>
+      <div class="history-meta">${s.turn_count || 0} turns</div>
+    </div>`;
+  }).join('');
+
+  $historyList.querySelectorAll('.history-item').forEach(el => {
+    el.onclick = () => {
+      loadSessionTurns(el.dataset.id);
+      closePanel('history');
+    };
+  });
+}
+
+function scrollChat() {
+  requestAnimationFrame(() => { $chat.scrollTop = $chat.scrollHeight; });
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function updateModelTag() {
+  const short = state.model.split('/').pop().replace(':free', '');
+  $modelTag.textContent = short;
+}
+
+// ── Panel helpers ──────────────────────────────────────
+function openPanel(name) {
+  const panel = name === 'settings' ? $settingsPanel : $historyPanel;
+  const overlay = name === 'settings' ? $settingsOverlay : $historyOverlay;
+  panel.classList.add('open');
+  overlay.classList.add('open');
+  if (name === 'history') loadSessions();
+}
+
+function closePanel(name) {
+  const panel = name === 'settings' ? $settingsPanel : $historyPanel;
+  const overlay = name === 'settings' ? $settingsOverlay : $historyOverlay;
+  panel.classList.remove('open');
+  overlay.classList.remove('open');
+}
+
+// ── Event Listeners ────────────────────────────────────
+function setupListeners() {
+  // Mic: push-to-talk (hold to record)
+  let held = false;
+  $mic.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    held = true;
+    startListening();
+  });
+  $mic.addEventListener('pointerup', () => { held = false; });
+  $mic.addEventListener('pointerleave', () => { if (held) { held = false; } });
+
+  // Text input
+  $input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && $input.value.trim()) {
+      sendMessage($input.value.trim());
+      $input.value = '';
+    }
+  });
+
+  // Settings
+  $settingsBtn.onclick = () => openPanel('settings');
+  $settingsOverlay.onclick = () => closePanel('settings');
+  document.getElementById('settingsCancel').onclick = () => closePanel('settings');
+  document.getElementById('settingsSave').onclick = () => {
+    state.supabaseUrl = document.getElementById('setSupabaseUrl').value.trim();
+    state.supabaseKey = document.getElementById('setSupabaseKey').value.trim();
+    state.model = document.getElementById('setModel').value;
+    state.voiceName = document.getElementById('setVoice').value;
+
+    localStorage.setItem('vl_supabaseUrl', state.supabaseUrl);
+    localStorage.setItem('vl_supabaseKey', state.supabaseKey);
+    localStorage.setItem('vl_model', state.model);
+    localStorage.setItem('vl_voiceName', state.voiceName);
+
+    updateModelTag();
+    initSupabase();
+    closePanel('settings');
+  };
+
+  // History
+  $historyBtn.onclick = () => openPanel('history');
+  $historyOverlay.onclick = () => closePanel('history');
+  document.getElementById('historyClose').onclick = () => closePanel('history');
+  document.getElementById('newChatBtn').onclick = () => {
+    endSession();
+    closePanel('history');
+  };
+
+  // Pre-fill settings
+  document.getElementById('setSupabaseUrl').value = state.supabaseUrl;
+  document.getElementById('setSupabaseKey').value = state.supabaseKey;
+  document.getElementById('setModel').value = state.model;
+}
+
+// ── Boot ───────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

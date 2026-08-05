@@ -109,3 +109,23 @@ Stage Summary:
 - Supabase is optional: system works without it, all DB calls fail silently
 - Migration SQL ready to paste into Supabase dashboard
 - .env.example documents all configuration
+
+---
+Task ID: 7
+Agent: Main
+Task: Build standalone mobile web app + Supabase Edge Function proxy
+
+Work Log:
+- Created supabase/functions/chat/index.ts: Deno Edge Function that proxies OpenRouter API, hides API key server-side, supports streaming and non-streaming, includes voice-optimized system prompt
+- Created voice-mobile/index.html: single-file mobile-first web app, dark UI, push-to-talk mic button, text input, chat bubbles, session history from Supabase, browser SpeechRecognition for STT, browser SpeechSynthesis for TTS, settings panel (Supabase URL/key, model selector, voice picker), history panel loads past sessions from shared DB
+- Created voice-mobile/manifest.json: PWA manifest with SVG icon for Add to Home Screen
+- Created voice-mobile/sw.js: service worker for offline caching (cache-first for assets, network-first for API)
+- Created voice-mobile/deploy-edge-function.sh: deploys Edge Function to Supabase CLI
+
+Stage Summary:
+- Phone runs as fully standalone PWA via browser (no local servers needed)
+- Uses same Supabase DB as PC — shared conversation history
+- STT: Web Speech API (browser native), TTS: SpeechSynthesis (browser native)
+- Brain: Supabase Edge Function → OpenRouter (API key server-side, never exposed)
+- Three files to deploy: Edge Function (supabase CLI) + 3 static files (any static host)
+- User needs to: deploy Edge Function with their API key, host the 3 mobile files, open on phone

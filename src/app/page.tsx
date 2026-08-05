@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useEffect, useCallback, createContext, useContext } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useJarvisStore } from '@/lib/jarvis-store';
 import type { ChatMessage, AgentState, PendingAction, ToolExecution } from '@/lib/jarvis-store';
@@ -105,19 +105,6 @@ function cn(...classes: (string | boolean | undefined | null)[]) {
   return classes.filter(Boolean).join(' ');
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   WEBSOCKET CONTEXT
-   ═══════════════════════════════════════════════════════════════ */
-
-interface WsContextValue {
-  sendMessage: (msg: { type: string; text?: string; image?: string }) => void;
-}
-
-const WsContext = createContext<WsContextValue>({ sendMessage: () => {} });
-
-function useWs() {
-  return useContext(WsContext);
-}
 
 /* ═══════════════════════════════════════════════════════════════
    STATUS BAR
@@ -405,17 +392,16 @@ function ToolExecutionCard({ exec }: { exec: ToolExecution }) {
 
 function PendingActionCard({ action }: { action: PendingAction }) {
   const { setPendingAction } = useJarvisStore();
-  const { sendMessage } = useWs();
 
   const handleConfirm = useCallback(() => {
     setPendingAction(null);
-    sendTextMessage('approve');
-  }, [sendTextMessage, setPendingAction]);
+    sendToJarvis('approved');
+  }, [setPendingAction]);
 
   const handleDeny = useCallback(() => {
     setPendingAction(null);
-    sendTextMessage('reject');
-  }, [sendTextMessage, setPendingAction]);
+    sendToJarvis('cancelled');
+  }, [setPendingAction]);
 
   return (
     <motion.div
@@ -476,20 +462,11 @@ function PendingActionCard({ action }: { action: PendingAction }) {
    ═══════════════════════════════════════════════════════════════ */
 
 function WelcomeSuggestions() {
-  const { sendMessage } = useWs();
-  const { addMessage, setAgentState } = useJarvisStore();
-
   const handleClick = useCallback(
     (text: string) => {
-      addMessage({
-        id: crypto.randomUUID(),
-        role: 'user',
-        text,
-        timestamp: Date.now(),
-      });
-      sendTextMessage(text);
+      sendToJarvis(text);
     },
-    [addMessage, setAgentState],
+    [],
   );
 
   return (
@@ -546,8 +523,7 @@ function ChatInput() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { agentState, setAgentState, setTranscript, addMessage } = useJarvisStore();
-  const { sendMessage } = useWs();
+  const { agentState, setAgentState, setTranscript, addMessage, setPendingAction, setLastToolExec } = useJarvisStore();
   const isListening = agentState === 'listening';
   const isBusy = agentState === 'thinking' || agentState === 'speaking' || agentState === 'executing';
   const canSend = input.trim().length > 0 && !isBusy && !isListening;
@@ -569,72 +545,13 @@ function ChatInput() {
     };
   }, []);
 
-  const sendTextMessage = useCallback(
-    (text: string) => {
-      addMessage({
-        id: crypto.randomUUID(),
-        role: 'user',
-        text,
-        timestamp: Date.now(),
-      });
-      setAgentState('thinking');
-
-      // Call the Next.js API route
-      const store = useJarvisStore.getState();
-      const apiMessages = store.messages
-        .filter(m => m.role === 'user' || m.role === 'assistant')
-        .slice(-10) // Keep last 10 messages for context
-        .map(m => ({ role: m.role, content: m.text }));
-
-      fetch('/api/jarvis', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: apiMessages }),
-      })
-        .then(r => r.json())
-        .then(data => {
-          if (data.error) {
-            addMessage({ id: crypto.randomUUID(), role: 'system', text: `Error: ${data.error}`, timestamp: Date.now() });
-            setAgentState('idle');
-            return;
-          }
-          if (data.actionRequest) {
-            setPendingAction({
-              actionId: crypto.randomUUID(),
-              tier: data.actionRequest.tier || 'T2',
-              tool: data.actionRequest.tool || 'unknown',
-              args: data.actionRequest.args || {},
-              description: data.actionRequest.description || 'Action requested',
-            });
-            setAgentState('awaiting_confirmation');
-            return;
-          }
-          if (data.text) {
-            addMessage({ id: crypto.randomUUID(), role: 'assistant', text: data.text, timestamp: Date.now() });
-            speakTextWithMouthSync(data.text);
-          }
-          if (data.toolExecutions) {
-            data.toolExecutions.forEach((te: any) =>
-              setLastToolExec({ tool: te.tool, result: te.result, tier: te.tier }),
-            );
-          }
-          setAgentState('idle');
-        })
-        .catch(err => {
-          addMessage({ id: crypto.randomUUID(), role: 'system', text: `Connection error. Check your connection.`, timestamp: Date.now() });
-          setAgentState('idle');
-        });
-    },
-    [addMessage, setAgentState, setPendingAction, setLastToolExec],
-  );
-
   const handleSend = useCallback(() => {
     if (!canSend) return;
     const text = input.trim();
     setInput('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
-    sendTextMessage(text);
-  }, [canSend, input, sendTextMessage]);
+    sendToJarvis(text);
+  }, [canSend, input]);
 
   const handleMicToggle = useCallback(() => {
     if (isListening) {
@@ -670,7 +587,7 @@ function ChatInput() {
           setAgentState('idle');
           try { recognition.stop(); } catch { /* ignore */ }
           recognitionRef.current = null;
-          sendTextMessage(final.trim());
+          sendToJarvis(final.trim());
         } else {
           setTranscript(interim);
         }
@@ -699,7 +616,7 @@ function ChatInput() {
       }
       setAgentState('listening');
     }
-  }, [isListening, isBusy, setAgentState, setTranscript, sendTextMessage]);
+  }, [isListening, isBusy, setAgentState, setTranscript]);
 
   const handleImageClick = useCallback(() => {
     fileInputRef.current?.click();
@@ -712,39 +629,12 @@ function ChatInput() {
       const reader = new FileReader();
       reader.onload = () => {
         const base64 = reader.result as string;
-        addMessage({
-          id: crypto.randomUUID(),
-          role: 'user',
-          text: 'What do you see?',
-          image: base64,
-          timestamp: Date.now(),
-        });
-        setAgentState('thinking');
-        // Send image to API
-        const store = useJarvisStore.getState();
-        const apiMessages = store.messages
-          .filter(m => m.role === 'user' || m.role === 'assistant')
-          .slice(-10)
-          .map(m => ({ role: m.role, content: m.text }));
-        fetch('/api/jarvis', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: apiMessages, image: base64 }),
-        }).then(r => r.json()).then(data => {
-          if (data.text) {
-            addMessage({ id: crypto.randomUUID(), role: 'assistant', text: data.text, timestamp: Date.now() });
-            speakTextWithMouthSync(data.text);
-          }
-          setAgentState('idle');
-        }).catch(() => {
-          addMessage({ id: crypto.randomUUID(), role: 'system', text: 'Failed to analyze image.', timestamp: Date.now() });
-          setAgentState('idle');
-        });
+        sendToJarvis('What do you see?', base64);
       };
       reader.readAsDataURL(file);
       e.target.value = '';
     },
-    [addMessage, setAgentState],
+    [],
   );
 
   const handleKeyDown = useCallback(
@@ -939,6 +829,65 @@ function ChatPanel() {
    TTS UTILITY
    ═══════════════════════════════════════════════════════════════ */
 
+function sendToJarvis(text: string, image?: string) {
+  const store = useJarvisStore.getState();
+  store.addMessage({
+    id: crypto.randomUUID(),
+    role: 'user',
+    text,
+    image: image ? image : undefined,
+    timestamp: Date.now(),
+  });
+  store.setAgentState('thinking');
+
+  const apiMessages = store.messages
+    .filter(m => m.role === 'user' || m.role === 'assistant')
+    .slice(-10)
+    .map(m => ({ role: m.role, content: m.text }));
+
+  const body: Record<string, any> = { messages: apiMessages };
+  if (image) body.image = image;
+
+  fetch('/api/jarvis', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        store.addMessage({ id: crypto.randomUUID(), role: 'system', text: `Error: ${data.error}`, timestamp: Date.now() });
+        store.setAgentState('idle');
+        return;
+      }
+      if (data.actionRequest) {
+        store.setPendingAction({
+          actionId: crypto.randomUUID(),
+          tier: data.actionRequest.tier || 'T2',
+          tool: data.actionRequest.tool || 'unknown',
+          args: data.actionRequest.args || {},
+          description: data.actionRequest.description || 'Action requested',
+        });
+        store.setAgentState('awaiting_confirmation');
+        return;
+      }
+      if (data.text) {
+        store.addMessage({ id: crypto.randomUUID(), role: 'assistant', text: data.text, timestamp: Date.now() });
+        speakTextWithMouthSync(data.text);
+      }
+      if (data.toolExecutions) {
+        data.toolExecutions.forEach((te: any) =>
+          store.setLastToolExec({ tool: te.tool, result: te.result, tier: te.tier }),
+        );
+      }
+      store.setAgentState('idle');
+    })
+    .catch(() => {
+      store.addMessage({ id: crypto.randomUUID(), role: 'system', text: 'Connection error. Check your connection.', timestamp: Date.now() });
+      store.setAgentState('idle');
+    });
+}
+
 function speakTextWithMouthSync(text: string) {
   const synth = window.speechSynthesis;
   synth.cancel(); // cancel any ongoing speech
@@ -1018,39 +967,22 @@ function speakTextWithMouthSync(text: string) {
    ═══════════════════════════════════════════════════════════════ */
 
 export default function Home() {
-  const isUnmountedRef = useRef(false);
-
-  const [wsContextValue] = useState<WsContextValue>(() => ({
-    sendMessage: (msg) => {
-      // sendMessage is now handled directly by components calling sendToJarvis
-    },
-  }));
-
-  // No WebSocket needed — we use fetch to /api/jarvis
-  // Keep the store connected state as true since we use HTTP
   useEffect(() => {
     useJarvisStore.getState().setConnected(true);
-    return () => { isUnmountedRef.current = true; window.speechSynthesis.cancel(); };
+    return () => { window.speechSynthesis.cancel(); };
   }, []);
 
   return (
-    <WsContext.Provider value={wsContextValue}>
-      <div className="flex h-screen flex-col overflow-hidden bg-[#050810] text-white">
-        <TooltipProvider delayDuration={300}>
-          <StatusBar />
+    <div className="flex h-screen flex-col overflow-hidden bg-[#050810] text-white">
+      <TooltipProvider delayDuration={300}>
+        <StatusBar />
 
-          <main className="flex flex-1 flex-col overflow-hidden md:flex-row">
-            {/* Left: 3D Face */}
-            <FacePanel />
-
-            {/* Vertical divider (desktop only) */}
-            <div className="hidden md:block w-px bg-gradient-to-b from-transparent via-cyan-500/10 to-transparent" />
-
-            {/* Right: Chat */}
-            <ChatPanel />
-          </main>
-        </TooltipProvider>
-      </div>
-    </WsContext.Provider>
+        <main className="flex flex-1 flex-col overflow-hidden md:flex-row">
+          <FacePanel />
+          <div className="hidden md:block w-px bg-gradient-to-b from-transparent via-cyan-500/10 to-transparent" />
+          <ChatPanel />
+        </main>
+      </TooltipProvider>
+    </div>
   );
 }

@@ -157,8 +157,9 @@
 </div>
 
 
+<script>(async()=>{if('serviceWorker' in navigator){const regs=await navigator.serviceWorker.getRegistrations();for(const r of regs){await r.unregister();console.log('Killed old SW:',r.scope)}if(navigator.serviceWorker.controller){location.reload()}}})();</script>
 <script>
-  // ZARA v5.1 — Voice-First Jarvis AI
+  // ZARA v5.2 — Voice-First Jarvis AI
 
 // Embedded credentials (base64 to pass GitHub push protection)
 const _EK='c2stb3ItdjEtNThhNmY0ZWMyOWExNjUwMzFiZThjZTgwZmEwZTI2OGFlMzc3ODJiYjkxMjFjMDEwNGEwZGUxNjQwYjllMDAxMQ==';

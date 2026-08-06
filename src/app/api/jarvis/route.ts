@@ -31,6 +31,7 @@ CAPABILITIES:
 - Build complete websites and applications
 - Create documents, reports, and analyses
 - Set reminders and manage schedules
+- Manage calendar events (create, view, delete)
 - Draft and send emails
 - Analyze images and describe what you see
 - Perform calculations and data analysis
@@ -49,10 +50,11 @@ const TOOLS = [
   { type: 'function' as const, function: { name: 'set_reminder', description: 'Set a reminder.', parameters: { type: 'object', properties: { time: { type: 'string' }, message: { type: 'string' } }, required: ['time','message'] } } },
   { type: 'function' as const, function: { name: 'send_email', description: 'Draft an email.', parameters: { type: 'object', properties: { to: { type: 'string' }, subject: { type: 'string' }, body: { type: 'string' } }, required: ['to','subject','body'] } } },
   { type: 'function' as const, function: { name: 'search_memory', description: 'Search past conversation history and user preferences to recall previous discussions, facts, or context.', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } },
+  { type: 'function' as const, function: { name: 'manage_calendar', description: 'Create, view, or delete calendar events. Use action=create to add, action=view to list, action=delete to remove.', parameters: { type: 'object', properties: { action: { type: 'string', enum: ['create', 'view', 'delete'] }, title: { type: 'string' }, date: { type: 'string' }, time: { type: 'string' }, description: { type: 'string' }, event_id: { type: 'string' } }, required: ['action'] } } },
 ];
 
 function getTier(toolName: string): string {
-  return ['web_search', 'set_reminder', 'search_memory'].includes(toolName) ? 'T1' : 'T2';
+  return ['web_search', 'set_reminder', 'search_memory', 'manage_calendar'].includes(toolName) ? 'T1' : 'T2';
 }
 
 // In-memory reminder store
@@ -111,6 +113,39 @@ async function executeTool(name: string, args: Record<string, string>): Promise<
         return { result: `Email sent to ${args.to} (ID: ${data.message_id}). Subject: "${args.subject}".`, tier: 'T2' };
       } catch (err: any) {
         return { result: `Email error: ${err.message}`, tier: 'T2' };
+      }
+    }
+    case 'manage_calendar': {
+      try {
+        if (args.action === 'create') {
+          const res = await fetch(`${INTERNAL_BASE}/api/calendar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: args.title, date: args.date, time: args.time, description: args.description }),
+          });
+          const data = await res.json();
+          if (!res.ok) return { result: `Calendar error: ${data.error || res.statusText}`, tier: 'T1' };
+          return { result: data.message, tier: 'T1' };
+        } else if (args.action === 'view') {
+          const params = new URLSearchParams();
+          if (args.date) params.set('date', args.date);
+          const res = await fetch(`${INTERNAL_BASE}/api/calendar?${params.toString()}`);
+          const data = await res.json();
+          if (!res.ok) return { result: `Calendar error: ${data.error || res.statusText}`, tier: 'T1' };
+          if (data.events.length === 0) return { result: 'No events found.', tier: 'T1' };
+          const list = data.events.map((e: any) => `- ${e.title} on ${e.date} at ${e.time}${e.description ? ': ' + e.description : ''}`).join('\n');
+          return { result: `Found ${data.events.length} event(s):\n${list}`, tier: 'T1' };
+        } else if (args.action === 'delete') {
+          const params = new URLSearchParams();
+          params.set('id', args.event_id || '');
+          const res = await fetch(`${INTERNAL_BASE}/api/calendar?${params.toString()}`, { method: 'DELETE' });
+          const data = await res.json();
+          if (!res.ok) return { result: `Calendar error: ${data.error || res.statusText}`, tier: 'T1' };
+          return { result: data.message, tier: 'T1' };
+        }
+        return { result: 'Unknown calendar action. Use create, view, or delete.', tier: 'T1' };
+      } catch (err: any) {
+        return { result: `Calendar error: ${err.message}`, tier: 'T1' };
       }
     }
     case 'search_memory': {

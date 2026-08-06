@@ -1,0 +1,681 @@
+   200→      </div>
+   201→
+   202→      {/* Wake word flash */}
+   203→      <AnimatePresence>
+   204→        {agentState === 'listening' && transcript && (
+   205→          <motion.div
+   206→            initial={{ opacity: 0, y: 8 }}
+   207→            animate={{ opacity: 1, y: 0 }}
+   208→            exit={{ opacity: 0, y: -4 }}
+   209→            className="absolute bottom-12 left-1/2 z-10 -translate-x-1/2"
+   210→          >
+   211→            <div className="flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-950/50 px-4 py-2 backdrop-blur-md">
+   212→              <Ear className="size-3.5 text-amber-400" />
+   213→              <span className="text-xs text-amber-300/80 max-w-[200px] truncate" style={{ fontFamily: 'var(--font-orbitron), monospace' }}>
+   214→                {transcript}
+   215→              </span>
+   216→            </div>
+   217→          </motion.div>
+   218→        )}
+   219→      </AnimatePresence>
+   220→
+   221→      {/* State overlays */}
+   222→      <AnimatePresence>
+   223→        {agentState === 'thinking' && (
+   224→          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2">
+   225→            <div className="flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-950/40 px-4 py-2 backdrop-blur-md">
+   226→              <Loader2 className="size-3.5 animate-spin text-violet-400" />
+   227→              <span className="text-[10px] text-violet-300/90" style={{ fontFamily: 'var(--font-orbitron), monospace' }}>PROCESSING</span>
+   228→            </div>
+   229→          </motion.div>
+   230→        )}
+   231→        {agentState === 'speaking' && (
+   232→          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2">
+   233→            <div className="flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-950/40 px-4 py-2 backdrop-blur-md">
+   234→              <Volume2 className="size-3.5 text-emerald-400" />
+   235→              <span className="text-[10px] text-emerald-300/90" style={{ fontFamily: 'var(--font-orbitron), monospace' }}>SPEAKING</span>
+   236→            </div>
+   237→          </motion.div>
+   238→        )}
+   239→      </AnimatePresence>
+   240→    </div>
+   241→  );
+   242→}
+   243→
+   244→/* ═══════════════════════════════════════════════════════════════
+   245→   MESSAGE BUBBLE
+   246→   ═══════════════════════════════════════════════════════════════ */
+   247→
+   248→function MessageBubble({ message }: { message: ChatMessage }) {
+   249→  const isUser = message.role === 'user';
+   250→  const isSystem = message.role === 'system';
+   251→
+   252→  return (
+   253→    <motion.div
+   254→      initial={{ opacity: 0, y: 10, scale: 0.98 }}
+   255→      animate={{ opacity: 1, y: 0, scale: 1 }}
+   256→      transition={{ duration: 0.25 }}
+   257→      className={cn('mx-4', isSystem && 'mx-4')}
+   258→    >
+   259→      {isSystem ? (
+   260→        <div className="flex items-center gap-2 rounded-lg bg-red-500/[0.06] border border-red-500/10 px-3 py-2">
+   261→          <X className="size-3 text-red-400 shrink-0" />
+   262→          <p className="text-xs text-red-300/80">{message.text}</p>
+   263→        </div>
+   264→      ) : (
+   265→        <div className={cn('flex gap-2.5', isUser && 'flex-row-reverse')}>
+   266→          <div className={cn(
+   267→            'flex size-6 shrink-0 items-center justify-center rounded-md mt-0.5',
+   268→            isUser ? 'bg-cyan-500/15 border border-cyan-500/20' : 'bg-white/5 border border-white/10',
+   269→          )}>
+   270→            {isUser ? <MessageSquare className="size-3 text-cyan-400" /> : <Sparkles className="size-3 text-cyan-400" />}
+   271→          </div>
+   272→          <div className={cn('max-w-[80%] space-y-1', isUser && 'text-right')}>
+   273→            <div className={cn(
+   274→              'rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed',
+   275→              isUser
+   276→                ? 'bg-cyan-500/10 border border-cyan-500/15 text-white/90 rounded-tr-md'
+   277→                : 'bg-white/[0.04] border border-white/[0.06] text-white/80 rounded-tl-md',
+   278→            )}>
+   279→              {message.image && (
+   280→                <img src={message.image} alt="Uploaded" className="mb-2 max-h-40 rounded-lg object-cover" />
+   281→              )}
+   282→              {message.text}
+   283→            </div>
+   284→            <p className="text-[10px] text-white/20 px-1" style={{ fontFamily: 'var(--font-orbitron), monospace' }}>
+   285→              {formatTime(message.timestamp)}
+   286→            </p>
+   287→          </div>
+   288→        </div>
+   289→      )}
+   290→    </motion.div>
+   291→  );
+   292→}
+   293→
+   294→/* ═══════════════════════════════════════════════════════════════
+   295→   TOOL EXECUTION CARD
+   296→   ═══════════════════════════════════════════════════════════════ */
+   297→
+   298→function ToolExecutionCard({ exec }: { exec: ToolExecution }) {
+   299→  return (
+   300→    <motion.div initial={{ opacity: 0, y: 10, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="mx-4">
+   301→      <div className="rounded-xl border border-violet-500/15 bg-violet-500/[0.04] p-3">
+   302→        <div className="flex items-center gap-2 mb-1.5">
+   303→          <Terminal className="size-3 text-violet-400" />
+   304→          <span className="text-[10px] font-mono text-violet-300/80" style={{ fontFamily: 'var(--font-orbitron), monospace' }}>{exec.tool}</span>
+   305→          <Badge variant="outline" className="ml-auto border-white/10 bg-white/5 text-[9px] text-white/40">{exec.tier}</Badge>
+   306→        </div>
+   307→        <p className="text-xs text-white/60 leading-relaxed">{exec.result}</p>
+   308→      </div>
+   309→    </motion.div>
+   310→  );
+   311→}
+   312→
+   313→/* ═══════════════════════════════════════════════════════════════
+   314→   PENDING ACTION CARD
+   315→   ═══════════════════════════════════════════════════════════════ */
+   316→
+   317→function PendingActionCard({ action }: { action: PendingAction }) {
+   318→  const { setPendingAction } = useJarvisStore();
+   319→  const handleConfirm = useCallback(() => { setPendingAction(null); sendToJarvis('approved'); }, [setPendingAction]);
+   320→  const handleDeny = useCallback(() => { setPendingAction(null); sendToJarvis('cancelled'); }, [setPendingAction]);
+   321→
+   322→  return (
+   323→    <motion.div initial={{ opacity: 0, y: 10, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="mx-4">
+   324→      <div className="rounded-xl border border-orange-500/20 bg-orange-500/[0.06] p-4">
+   325→        <div className="flex items-center gap-2 mb-3">
+   326→          <ShieldAlert className="size-4 text-orange-400" />
+   327→          <span className="text-xs font-semibold text-orange-400">Action Requires Confirmation</span>
+   328→          <Badge variant="outline" className="ml-auto border-white/10 bg-white/5 text-[10px] text-white/50">Tier {action.tier}</Badge>
+   329→        </div>
+   330→        <div className="space-y-2 mb-4">
+   331→          <div className="flex items-center gap-2">
+   332→            <Terminal className="size-3 text-white/30" />
+   333→            <span className="text-xs font-mono text-orange-300/90" style={{ fontFamily: 'var(--font-orbitron), monospace' }}>{action.tool}</span>
+   334→          </div>
+   335→          <p className="text-sm text-white/70 leading-relaxed">{action.description}</p>
+   336→          {Object.keys(action.args).length > 0 && (
+   337→            <pre className="rounded-lg bg-black/30 px-3 py-2 text-xs font-mono text-white/50 overflow-x-auto">{JSON.stringify(action.args, null, 2)}</pre>
+   338→          )}
+   339→        </div>
+   340→        <Separator className="bg-orange-500/10 mb-3" />
+   341→        <div className="flex items-center gap-2 justify-end">
+   342→          <Button variant="ghost" size="sm" onClick={handleDeny} className="h-8 gap-1.5 text-white/50 hover:text-rose-300 hover:bg-rose-500/10">
+   343→            <X className="size-3.5" /> Deny
+   344→          </Button>
+   345→          <Button size="sm" onClick={handleConfirm} className="h-8 gap-1.5 bg-emerald-600/80 text-white border-0 hover:bg-emerald-600">
+   346→            <Check className="size-3.5" /> Confirm
+   347→          </Button>
+   348→        </div>
+   349→      </div>
+   350→    </motion.div>
+   351→  );
+   352→}
+   353→
+   354→/* ═══════════════════════════════════════════════════════════════
+   355→   WELCOME / SUGGESTIONS
+   356→   ═══════════════════════════════════════════════════════════════ */
+   357→
+   358→function WelcomeSuggestions() {
+   359→  const handleClick = useCallback((text: string) => { sendToJarvis(text); }, []);
+   360→  return (
+   361→    <div className="flex h-full flex-col items-center justify-center px-6 py-12">
+   362→      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.5 }} className="text-center mb-10">
+   363→        <div className="mb-4 flex justify-center">
+   364→          <div className="flex size-14 items-center justify-center rounded-2xl border border-cyan-500/20 bg-cyan-500/[0.08]">
+   365→            <Sparkles className="size-7 text-cyan-400" />
+   366→          </div>
+   367→        </div>
+   368→        <h2 className="text-xl font-semibold text-white/90 mb-2" style={{ fontFamily: 'var(--font-orbitron), monospace' }}>How may I assist you?</h2>
+   369→        <p className="text-sm text-white/40 max-w-xs mx-auto leading-relaxed">Say <span className="text-amber-400">"Hello Zara"</span> to activate voice, or type below. I can search, code, send emails, and more.</p>
+   370→      </motion.div>
+   371→      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 0.5 }} className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-md">
+   372→        {SUGGESTIONS.map((suggestion, i) => (
+   373→          <motion.button
+   374→            key={suggestion}
+   375→            initial={{ opacity: 0, y: 8 }}
+   376→            animate={{ opacity: 1, y: 0 }}
+   377→            transition={{ delay: 0.5 + i * 0.05 }}
+   378→            onClick={() => handleClick(suggestion)}
+   379→            className="group flex items-center gap-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3.5 py-2.5 text-left text-sm text-white/60 transition-all hover:border-cyan-500/20 hover:bg-cyan-500/[0.06] hover:text-cyan-200"
+   380→          >
+   381→            <span className="flex size-5 shrink-0 items-center justify-center rounded-md border border-white/[0.06] bg-white/[0.03] text-[10px] font-mono text-white/30 group-hover:border-cyan-500/20 group-hover:bg-cyan-500/10 group-hover:text-cyan-400">
+   382→              {String(i + 1).padStart(2, '0')}
+   383→            </span>
+   384→            <span className="truncate text-xs">{suggestion}</span>
+   385→          </motion.button>
+   386→        ))}
+   387→      </motion.div>
+   388→      <p className="mt-6 text-[10px] text-white/20 text-center" style={{ fontFamily: 'var(--font-orbitron), monospace' }}>
+   389→        Press <kbd className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[9px] mx-0.5">Space</kbd> for voice · <kbd className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[9px] mx-0.5">Ctrl+V</kbd> to paste image
+   390→      </p>
+   391→    </div>
+   392→  );
+   393→}
+   394→
+   395→/* ═══════════════════════════════════════════════════════════════
+   396→   SEND TO JARVIS (shared)
+   397→   ═══════════════════════════════════════════════════════════════ */
+   398→
+   399→function sendToJarvis(text: string, image?: string) {
+   400→  const store = useJarvisStore.getState();
+   401→  playSoundEffect('send');
+   402→  store.addMessage({ id: crypto.randomUUID(), role: 'user', text, image: image || undefined, timestamp: Date.now() });
+   403→  store.setAgentState('thinking');
+   404→
+   405→  const apiMessages = store.messages
+   406→    .filter(m => m.role === 'user' || m.role === 'assistant')
+   407→    .slice(-10)
+   408→    .map(m => ({ role: m.role, content: m.text }));
+   409→
+   410→  const body: Record<string, any> = { messages: apiMessages };
+   411→  if (image) body.image = image;
+   412→
+   413→  fetch('/api/jarvis', {
+   414→    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+   415→  })
+   416→    .then(r => r.json())
+   417→    .then(data => {
+   418→      if (data.error) {
+   419→        store.addMessage({ id: crypto.randomUUID(), role: 'system', text: `Error: ${data.error}`, timestamp: Date.now() });
+   420→        store.setAgentState('idle');
+   421→        playSoundEffect('error');
+   422→        return;
+   423→      }
+   424→      if (data.actionRequest) {
+   425→        store.setPendingAction({
+   426→          actionId: crypto.randomUUID(), tier: data.actionRequest.tier || 'T2',
+   427→          tool: data.actionRequest.tool || 'unknown', args: data.actionRequest.args || {},
+   428→          description: data.actionRequest.description || 'Action requested',
+   429→        });
+   430→        store.setAgentState('awaiting_confirmation');
+   431→        return;
+   432→      }
+   433→      if (data.text) {
+   434→        store.addMessage({ id: crypto.randomUUID(), role: 'assistant', text: data.text, timestamp: Date.now() });
+   435→        playSoundEffect('receive');
+   436→        speakTextWithMouthSync(data.text);
+   437→      }
+   438→      if (data.toolExecutions) {
+   439→        data.toolExecutions.forEach((te: any) => store.setLastToolExec({ tool: te.tool, result: te.result, tier: te.tier }));
+   440→      }
+   441→      // Persist conversation
+   442→      const msgs = store.messages.filter(m => m.role === 'user' || m.role === 'assistant');
+   443→      saveConversation(msgs.map(m => ({ role: m.role, text: m.text, timestamp: m.timestamp })));
+   444→    })
+   445→    .catch(() => {
+   446→      store.addMessage({ id: crypto.randomUUID(), role: 'system', text: 'Connection error. Check your connection.', timestamp: Date.now() });
+   447→      store.setAgentState('idle');
+   448→      playSoundEffect('error');
+   449→    });
+   450→}
+   451→
+   452→/* ═══════════════════════════════════════════════════════════════
+   453→   CHAT INPUT BAR
+   454→   ═══════════════════════════════════════════════════════════════ */
+   455→
+   456→function ChatInput() {
+   457→  const [input, setInput] = useState('');
+   458→  const textareaRef = useRef<HTMLTextAreaElement>(null);
+   459→  const recognitionRef = useRef<any>(null);
+   460→  const fileInputRef = useRef<HTMLInputElement>(null);
+   461→  const dropRef = useRef<HTMLDivElement>(null);
+   462→  const [isDragging, setIsDragging] = useState(false);
+   463→  const { agentState, setAgentState, setTranscript } = useJarvisStore();
+   464→  const isListening = agentState === 'listening';
+   465→  const isBusy = agentState === 'thinking' || agentState === 'speaking' || agentState === 'executing';
+   466→  const canSend = input.trim().length > 0 && !isBusy && !isListening;
+   467→
+   468→  // Auto-resize textarea
+   469→  useEffect(() => {
+   470→    const el = textareaRef.current;
+   471→    if (!el) return;
+   472→    el.style.height = 'auto';
+   473→    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+   474→  }, [input]);
+   475→
+   476→  // Clipboard paste for images
+   477→  useEffect(() => {
+   478→    const handlePaste = (e: ClipboardEvent) => {
+   479→      const items = e.clipboardData?.items;
+   480→      if (!items) return;
+   481→      for (const item of Array.from(items)) {
+   482→        if (item.type.startsWith('image/')) {
+   483→          e.preventDefault();
+   484→          const file = item.getAsFile();
+   485→          if (file) processImageFile(file);
+   486→          return;
+   487→        }
+   488→      }
+   489→    };
+   490→    window.addEventListener('paste', handlePaste);
+   491→    return () => window.removeEventListener('paste', handlePaste);
+   492→  }, [isBusy]);
+   493→
+   494→  // Drag and drop
+   495→  const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); }, []);
+   496→  const handleDragLeave = useCallback(() => setIsDragging(false), []);
+   497→  const handleDrop = useCallback((e: React.DragEvent) => {
+   498→    e.preventDefault();
+   499→    setIsDragging(false);
+   500→    const file = e.dataTransfer.files[0];
+   501→    if (file && file.type.startsWith('image/')) processImageFile(file);
+   502→  }, [isBusy]);
+   503→
+   504→  function processImageFile(file: File) {
+   505→    if (isBusy) return;
+   506→    const reader = new FileReader();
+   507→    reader.onload = () => { const base64 = reader.result as string; sendToJarvis('What do you see in this image?', base64); };
+   508→    reader.readAsDataURL(file);
+   509→  }
+   510→
+   511→  // Cleanup recognition
+   512→  useEffect(() => {
+   513→    return () => { try { recognitionRef.current?.stop(); } catch { /* */ } };
+   514→  }, []);
+   515→
+   516→  const handleSend = useCallback(() => {
+   517→    if (!canSend) return;
+   518→    const text = input.trim(); setInput('');
+   519→    if (textareaRef.current) textareaRef.current.style.height = 'auto';
+   520→    sendToJarvis(text);
+   521→  }, [canSend, input]);
+   522→
+   523→  const handleMicToggle = useCallback(() => {
+   524→    if (isListening) {
+   525→      try { recognitionRef.current?.stop(); } catch { /* */ }
+   526→      recognitionRef.current = null;
+   527→      setAgentState('idle'); setTranscript('');
+   528→    } else if (!isBusy) {
+   529→      const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+   530→      if (!SR) return;
+   531→      const rec = new SR();
+   532→      rec.continuous = true; rec.interimResults = true; rec.lang = 'en-US';
+   533→      rec.onresult = (ev: any) => {
+   534→        let interim = '', final = '';
+   535→        for (let i = ev.resultIndex; i < ev.results.length; i++) {
+   536→          const t = ev.results[i][0].transcript;
+   537→          if (ev.results[i].isFinal) final += t; else interim += t;
+   538→        }
+   539→        if (final.trim()) {
+   540→          setTranscript(''); setAgentState('idle');
+   541→          try { rec.stop(); } catch { /* */ }
+   542→          recognitionRef.current = null;
+   543→          sendToJarvis(final.trim());
+   544→        } else { setTranscript(interim); }
+   545→      };
+   546→      rec.onerror = () => { setAgentState('idle'); setTranscript(''); recognitionRef.current = null; };
+   547→      rec.onend = () => {
+   548→        if (useJarvisStore.getState().agentState === 'listening') {
+   549→          setAgentState('idle'); setTranscript(''); recognitionRef.current = null;
+   550→        }
+   551→      };
+   552→      recognitionRef.current = rec;
+   553→      try { rec.start(); } catch { /* */ }
+   554→      setAgentState('listening');
+   555→    }
+   556→  }, [isListening, isBusy, setAgentState, setTranscript]);
+   557→
+   558→  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+   559→    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+   560→  }, [handleSend]);
+   561→
+   562→  return (
+   563→    <div
+   564→      ref={dropRef}
+   565→      onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}
+   566→      className={cn(
+   567→        'shrink-0 border-t bg-[#080c16]/80 backdrop-blur-xl px-3 py-3 md:px-4 md:py-3.5 transition-colors',
+   568→        isDragging ? 'border-cyan-500/40 bg-cyan-500/[0.04]' : 'border-white/[0.06]',
+   569→      )}
+   570→    >
+   571→      {/* Drag overlay */}
+   572→      <AnimatePresence>
+   573→        {isDragging && (
+   574→          <motion.div
+   575→            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+   576→            className="absolute inset-0 z-30 flex items-center justify-center rounded-t-xl border-2 border-dashed border-cyan-500/30 bg-cyan-500/[0.03]"
+   577→          >
+   578→            <div className="flex flex-col items-center gap-2">
+   579→              <Upload className="size-6 text-cyan-400" />
+   580→              <span className="text-xs text-cyan-300/60" style={{ fontFamily: 'var(--font-orbitron), monospace' }}>DROP IMAGE HERE</span>
+   581→            </div>
+   582→          </motion.div>
+   583→        )}
+   584→      </AnimatePresence>
+   585→
+   586→      <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => {
+   587→        const file = e.target.files?.[0]; if (file) processImageFile(file); e.target.value = '';
+   588→      }} />
+   589→
+   590→      <div className="mx-auto flex max-w-3xl items-end gap-2">
+   591→        <Tooltip>
+   592→          <TooltipTrigger asChild>
+   593→            <Button
+   594→              variant={isListening ? 'destructive' : 'outline'} size="icon"
+   595→              onClick={handleMicToggle} disabled={isBusy && !isListening}
+   596→              data-mic-btn
+   597→              className={cn(
+   598→                'h-10 w-10 shrink-0 rounded-xl border-white/10 bg-white/5 text-white/60 transition-all hover:text-white hover:bg-white/10',
+   599→                isListening && 'border-amber-500/40 bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 hover:text-amber-300 animate-pulse',
+   600→              )}
+   601→            >
+   602→              {isListening ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+   603→            </Button>
+   604→          </TooltipTrigger>
+   605→          <TooltipContent side="top" className="text-xs">{isListening ? 'Stop' : 'Voice (or press Space)'}</TooltipContent>
+   606→        </Tooltip>
+   607→
+   608→        <Tooltip>
+   609→          <TooltipTrigger asChild>
+   610→            <Button variant="outline" size="icon" onClick={() => fileInputRef.current?.click()} disabled={isBusy}
+   611→              className="h-10 w-10 shrink-0 rounded-xl border-white/10 bg-white/5 text-white/60 transition-all hover:text-white hover:bg-white/10">
+   612→              <Camera className="size-4" />
+   613→            </Button>
+   614→          </TooltipTrigger>
+   615→          <TooltipContent side="top" className="text-xs">Send image (or paste)</TooltipContent>
+   616→        </Tooltip>
+   617→
+   618→        <div className="relative flex-1">
+   619→          <textarea
+   620→            ref={textareaRef} value={input} onChange={(e) => setInput(e.target.value)}
+   621→            onKeyDown={handleKeyDown}
+   622→            placeholder={isBusy ? (agentState === 'thinking' ? 'ZARA is processing...' : agentState === 'speaking' ? 'ZARA is speaking...' : 'Executing...') : 'Ask ZARA anything...'}
+   623→            disabled={isBusy || isListening} rows={1}
+   624→            className={cn(
+   625→              'w-full resize-none rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm text-white/90 placeholder:text-white/25 outline-none transition-colors',
+   626→              'focus:border-cyan-500/25 focus:bg-white/[0.05]',
+   627→              'disabled:cursor-not-allowed disabled:opacity-40',
+   628→            )}
+   629→          />
+   630→        </div>
+   631→
+   632→        <Tooltip>
+   633→          <TooltipTrigger asChild>
+   634→            <Button
+   635→              size="icon" onClick={handleSend} disabled={!canSend}
+   636→              className={cn(
+   637→                'h-10 w-10 shrink-0 rounded-xl transition-all',
+   638→                canSend ? 'bg-cyan-500/80 text-white border-0 hover:bg-cyan-500 shadow-[0_0_20px_rgba(0,212,255,0.15)]' : 'border border-white/[0.08] bg-white/[0.03] text-white/20',
+   639→              )}
+   640→            >
+   641→              {agentState === 'thinking' ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+   642→            </Button>
+   643→          </TooltipTrigger>
+   644→          <TooltipContent side="top" className="text-xs">Send</TooltipContent>
+   645→        </Tooltip>
+   646→      </div>
+   647→
+   648→      <p className="mt-2 text-center text-[10px] text-white/15" style={{ fontFamily: 'var(--font-orbitron), monospace' }}>
+   649→        <kbd className="rounded border border-white/10 bg-white/5 px-1 py-0.5 text-[9px]">Enter</kbd> send
+   650→        {' · '}<kbd className="rounded border border-white/10 bg-white/5 px-1 py-0.5 text-[9px]">Space</kbd> voice
+   651→        {' · '}<kbd className="rounded border border-white/10 bg-white/5 px-1 py-0.5 text-[9px]">Ctrl+V</kbd> paste image
+   652→      </p>
+   653→    </div>
+   654→  );
+   655→}
+   656→
+   657→/* ═══════════════════════════════════════════════════════════════
+   658→   CHAT PANEL
+   659→   ═══════════════════════════════════════════════════════════════ */
+   660→
+   661→function ChatPanel() {
+   662→  const { messages, pendingAction, lastToolExec } = useJarvisStore();
+   663→  const scrollRef = useRef<HTMLDivElement>(null);
+   664→  const hasMessages = messages.length > 0;
+   665→
+   666→  useEffect(() => {
+   667→    if (scrollRef.current) {
+   668→      const vp = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
+   669→      if (vp) vp.scrollTop = vp.scrollHeight;
+   670→    }
+   671→  }, [messages.length, pendingAction, lastToolExec]);
+   672→
+   673→  return (
+   674→    <div className="flex flex-1 flex-col overflow-hidden bg-[#080c16]/60">
+   675→      <div className="flex h-9 shrink-0 items-center border-b border-white/[0.04] px-4">
+   676→        <span className="text-[10px] font-medium tracking-wider text-white/25 uppercase" style={{ fontFamily: 'var(--font-orbitron), monospace' }}>Conversation</span>
+   677→        {hasMessages && (
+   678→          <Badge variant="outline" className="ml-2 h-4 border-white/[0.06] bg-white/[0.03] px-1.5 text-[9px] text-white/30">
+   679→            {messages.length}
+   680→          </Badge>
+   681→        )}
+   682→      </div>
+   683→      <ScrollArea ref={scrollRef} className="flex-1">
+   684→        {hasMessages ? (
+   685→          <div className="flex flex-col gap-4 py-4">
+   686→            {messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)}
+   687→            <AnimatePresence>{lastToolExec && <ToolExecutionCard exec={lastToolExec} />}</AnimatePresence>
+   688→            <AnimatePresence>{pendingAction && <PendingActionCard action={pendingAction} />}</AnimatePresence>
+   689→          </div>
+   690→        ) : (
+   691→          <WelcomeSuggestions />
+   692→        )}
+   693→      </ScrollArea>
+   694→      <ChatInput />
+   695→    </div>
+   696→  );
+   697→}
+   698→
+   699→/* ═══════════════════════════════════════════════════════════════
+   700→   TTS UTILITY
+   701→   ═══════════════════════════════════════════════════════════════ */
+   702→
+   703→function speakTextWithMouthSync(text: string) {
+   704→  const synth = window.speechSynthesis;
+   705→  synth.cancel();
+   706→  const store = useJarvisStore.getState();
+   707→  store.setAgentState('speaking');
+   708→
+   709→  const chunks: string[] = [];
+   710→  const sentences = text.match(/[^.!?\n]+[.!?\n]+/g) || [text];
+   711→  let buffer = '';
+   712→  for (const s of sentences) {
+   713→    if ((buffer + s).length > 150 && buffer.trim()) { chunks.push(buffer.trim()); buffer = s; } else { buffer += s; }
+   714→  }
+   715→  if (buffer.trim()) chunks.push(buffer.trim());
+   716→
+   717→  let mouthDecay: ReturnType<typeof setTimeout> | null = null;
+   718→  let keepalive: ReturnType<typeof setInterval> | null = null;
+   719→
+   720→  keepalive = setInterval(() => {
+   721→    if (synth.speaking) { synth.pause(); setTimeout(() => synth.resume(), 50); }
+   722→  }, 10000);
+   723→
+   724→  const cleanup = () => {
+   725→    if (keepalive) clearInterval(keepalive);
+   726→    if (mouthDecay) clearTimeout(mouthDecay);
+   727→    useJarvisStore.getState().setMouthOpen(0);
+   728→    useJarvisStore.getState().setAgentState('idle');
+   729→  };
+   730→
+   731→  let idx = 0;
+   732→  const speakNext = () => {
+   733→    if (idx >= chunks.length) { cleanup(); return; }
+   734→    const utt = new SpeechSynthesisUtterance(chunks[idx]);
+   735→    // Select a good English voice
+   736→    const voices = synth.getVoices();
+   737→    const preferred = voices.find(v => v.lang.startsWith('en') && v.name.includes('Google')) ||
+   738→                      voices.find(v => v.lang.startsWith('en') && !v.localService) ||
+   739→                      voices.find(v => v.lang.startsWith('en'));
+   740→    if (preferred) utt.voice = preferred;
+   741→
+   742→    utt.onboundary = () => {
+   743→      useJarvisStore.getState().setMouthOpen(0.5);
+   744→      if (mouthDecay) clearTimeout(mouthDecay);
+   745→      mouthDecay = setTimeout(() => { useJarvisStore.getState().setMouthOpen(0); }, 200);
+   746→    };
+   747→    utt.onend = () => { idx++; speakNext(); };
+   748→    utt.onerror = () => { cleanup(); };
+   749→    synth.speak(utt);
+   750→  };
+   751→  speakNext();
+   752→}
+   753→
+   754→/* ═══════════════════════════════════════════════════════════════
+   755→   MAIN PAGE
+   756→   ═══════════════════════════════════════════════════════════════ */
+   757→
+   758→export default function Home() {
+   759→  const [wakeWordActive, setWakeWordActive] = useState(false);
+   760→  const wakeWordRef = useRef<WakeWordDetector | null>(null);
+   761→  const analyserRef = useRef<AnalyserNode | null>(null);
+   762→  const bargeInRef = useRef<(() => void) | null>(null);
+   763→
+   764→  // Initialize connection + audio + PWA
+   765→  useEffect(() => {
+   766→    useJarvisStore.getState().setConnected(true);
+   767→
+   768→    // Create audio analyser for visualization
+   769→    createAudioAnalyser().then(analyser => {
+   770→      analyserRef.current = analyser;
+   771→    }).catch(() => {});
+   772→
+   773→    // Register service worker for PWA
+   774→    if ('serviceWorker' in navigator) {
+   775→      navigator.serviceWorker.register('/sw.js').catch(() => {});
+   776→    }
+   777→
+   778→    // Load voices (needed for TTS selection)
+   779→    speechSynthesis.getVoices();
+   780→    speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+   781→
+   782→    // Keyboard shortcut: Space to toggle mic (when not in textarea)
+   783→    const handleKeyDown = (e: KeyboardEvent) => {
+   784→      const tag = (e.target as HTMLElement).tagName;
+   785→      if (tag === 'TEXTAREA' || tag === 'INPUT') return;
+   786→      if (e.code === 'Space') {
+   787→        e.preventDefault();
+   788→        // Trigger mic toggle via clicking the mic button
+   789→        document.querySelector<HTMLButtonElement>('[data-mic-btn]')?.click();
+   790→      }
+   791→    };
+   792→    window.addEventListener('keydown', handleKeyDown);
+   793→
+   794→    return () => {
+   795→      window.removeEventListener('keydown', handleKeyDown);
+   796→      window.speechSynthesis.cancel();
+   797→      wakeWordRef.current?.destroy();
+   798→      bargeInRef.current?.();
+   799→      cleanupAudioSystem();
+   800→    };
+   801→  }, []);
+   802→
+   803→  // Barge-in: stop speaking when user starts talking
+   804→  useEffect(() => {
+   805→    const { agentState } = useJarvisStore.getState();
+   806→    if (agentState === 'speaking' && analyserRef.current) {
+   807→      bargeInRef.current = startBargeInDetection(analyserRef.current, () => {
+   808→        stopSpeaking();
+   809→        playSoundEffect('click');
+   810→      });
+   811→    }
+   812→    return () => { bargeInRef.current?.(); bargeInRef.current = null; };
+   813→  });
+   814→
+   815→  // Wake word toggle
+   816→  const toggleWakeWord = useCallback(() => {
+   817→    if (wakeWordActive) {
+   818→      wakeWordRef.current?.destroy();
+   819→      wakeWordRef.current = null;
+   820→      setWakeWordActive(false);
+   821→    } else {
+   822→      const detector = new WakeWordDetector();
+   823→      detector.start(
+   824→        () => {
+   825→          // Wake word detected!
+   826→          playSoundEffect('wake');
+   827→          stopSpeaking(); // Stop any ongoing TTS
+   828→          const store = useJarvisStore.getState();
+   829→          if (store.agentState !== 'thinking') {
+   830→            store.setAgentState('listening');
+   831→            // Auto-start STT for 15 seconds of continuous listening
+   832→            const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+   833→            if (!SR) return;
+   834→            const rec = new SR();
+   835→            rec.continuous = true; rec.interimResults = true; rec.lang = 'en-US';
+   836→            let timeout = setTimeout(() => {
+   837→              try { rec.stop(); } catch { /* */ }
+   838→              store.setAgentState('idle'); store.setTranscript('');
+   839→            }, 15000);
+   840→            rec.onresult = (ev: any) => {
+   841→              let interim = '', final = '';
+   842→              for (let i = ev.resultIndex; i < ev.results.length; i++) {
+   843→                const t = ev.results[i][0].transcript;
+   844→                if (ev.results[i].isFinal) final += t; else interim += t;
+   845→              }
+   846→              store.setTranscript(interim);
+   847→              if (final.trim()) {
+   848→                clearTimeout(timeout);
+   849→                store.setTranscript('');
+   850→                try { rec.stop(); } catch { /* */ }
+   851→                sendToJarvis(final.trim());
+   852→              }
+   853→            };
+   854→            rec.onerror = () => { clearTimeout(timeout); store.setAgentState('idle'); store.setTranscript(''); };
+   855→            rec.onend = () => { clearTimeout(timeout); if (store.agentState === 'listening') { store.setAgentState('idle'); store.setTranscript(''); } };
+   856→            try { rec.start(); } catch { /* */ }
+   857→          }
+   858→        },
+   859→        (text) => { /* interim transcript available for display */ },
+   860→        () => { /* error */ },
+   861→      );
+   862→      wakeWordRef.current = detector;
+   863→      setWakeWordActive(true);
+   864→    }
+   865→  }, [wakeWordActive]);
+   866→
+   867→  return (
+   868→    <div className="flex h-screen flex-col overflow-hidden bg-[#050810] text-white">
+   869→      <TooltipProvider delayDuration={300}>
+   870→        <StatusBar wakeWordActive={wakeWordActive} onToggleWakeWord={toggleWakeWord} />
+   871→        <main className="flex flex-1 flex-col overflow-hidden md:flex-row">
+   872→          <FacePanel analyser={analyserRef.current} />
+   873→          <div className="hidden md:block w-px bg-gradient-to-b from-transparent via-cyan-500/10 to-transparent" />
+   874→          <ChatPanel />
+   875→        </main>
+   876→      </TooltipProvider>
+   877→    </div>
+   878→  );
+   879→}
+   880→

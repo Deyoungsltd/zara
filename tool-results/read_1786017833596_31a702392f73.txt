@@ -1,0 +1,873 @@
+     1→'use client';
+     2→
+     3→import { useRef, useMemo, useEffect } from 'react';
+     4→import { Canvas, useFrame } from '@react-three/fiber';
+     5→import { Float, Line } from '@react-three/drei';
+     6→import { EffectComposer, Bloom } from '@react-three/postprocessing';
+     7→import * as THREE from 'three';
+     8→import { useJarvisStore } from '@/lib/jarvis-store';
+     9→import type { AgentState } from '@/lib/jarvis-store';
+    10→
+    11→/* ================================================================
+    12→   MODULE-LEVEL SHARED STATE (eye tracking & blink)
+    13→   ================================================================ */
+    14→
+    15→const _mouse = { x: 0, y: 0 };
+    16→const _blink = {
+    17→  scale: 1,
+    18→  timer: 0,
+    19→  nextBlink: 3 + Math.random() * 2,
+    20→  active: false,
+    21→  elapsed: 0,
+    22→};
+    23→
+    24→/* ================================================================
+    25→   HELPERS
+    26→   ================================================================ */
+    27→
+    28→function ellipsePoints(
+    29→  cx: number, cy: number, rx: number, ry: number, n: number,
+    30→  startAngle = 0, endAngle = Math.PI * 2,
+    31→): [number, number, number][] {
+    32→  const pts: [number, number, number][] = [];
+    33→  for (let i = 0; i <= n; i++) {
+    34→    const a = startAngle + (endAngle - startAngle) * (i / n);
+    35→    pts.push([cx + Math.cos(a) * rx, cy + Math.sin(a) * ry, 0]);
+    36→  }
+    37→  return pts;
+    38→}
+    39→
+    40→function getStateColors(state: AgentState) {
+    41→  const base = {
+    42→    eye: '#00e8ff',
+    43→    mouth: '#00ffdd',
+    44→    hudRing: '#00d4ff',
+    45→    glow: '#00d4ff',
+    46→    circuitry: '#00a8c8',
+    47→    scanLine: '#00e8ff',
+    48→    particle: '#00d4ff',
+    49→    dataStream: '#00e8ff',
+    50→    innerGlow: '#00d4ff',
+    51→  };
+    52→  switch (state) {
+    53→    case 'listening':
+    54→      return { ...base, eye: '#ffb347', mouth: '#ffb347', scanLine: '#ffb347', dataStream: '#ffb347' };
+    55→    case 'thinking':
+    56→      return {
+    57→        ...base,
+    58→        eye: '#d0ffff',
+    59→        mouth: '#e0fcff',
+    60→        glow: '#d0ffff',
+    61→        hudRing: '#b0e8ff',
+    62→        scanLine: '#d0ffff',
+    63→        dataStream: '#d0ffff',
+    64→        particle: '#b0e8ff',
+    65→        innerGlow: '#d0ffff',
+    66→      };
+    67→    case 'speaking':
+    68→      return { ...base, mouth: '#00ffaa', scanLine: '#00ffaa', dataStream: '#00ffaa' };
+    69→    case 'executing':
+    70→      return {
+    71→        ...base,
+    72→        hudRing: '#a855f7',
+    73→        circuitry: '#7c3aed',
+    74→        scanLine: '#a855f7',
+    75→        glow: '#a855f7',
+    76→        dataStream: '#a855f7',
+    77→        particle: '#a855f7',
+    78→        innerGlow: '#a855f7',
+    79→      };
+    80→    default:
+    81→      return base;
+    82→  }
+    83→}
+    84→
+    85→/* ================================================================
+    86→   CIRCUITRY LINES – 11 circuit-board-style decorative traces
+    87→   ================================================================ */
+    88→
+    89→function CircuitryLines({ opacity, color }: { opacity: number; color: string }) {
+    90→  const lines = useMemo(() => {
+    91→    const paths: { pts: [number, number, number][]; width: number }[] = [
+    92→      // 1. Left temple → left cheekbone (angular trace)
+    93→      {
+    94→        pts: [[-1.05, 0.15, 0.01], [-0.85, 0.15, 0.01], [-0.85, -0.1, 0.01], [-0.7, -0.1, 0.01], [-0.7, -0.35, 0.01], [-0.52, -0.35, 0.01]],
+    95→        width: 0.6,
+    96→      },
+    97→      // 2. Right temple → right cheekbone
+    98→      {
+    99→        pts: [[1.05, 0.15, 0.01], [0.85, 0.15, 0.01], [0.85, -0.1, 0.01], [0.7, -0.1, 0.01], [0.7, -0.35, 0.01], [0.52, -0.35, 0.01]],
+   100→        width: 0.6,
+   101→      },
+   102→      // 3. Left forehead horizontal trace
+   103→      {
+   104→        pts: [[-0.88, 0.68, 0.01], [-0.55, 0.72, 0.01], [-0.25, 0.68, 0.01], [0.05, 0.72, 0.01]],
+   105→        width: 0.5,
+   106→      },
+   107→      // 4. Right forehead horizontal trace
+   108→      {
+   109→        pts: [[0.88, 0.68, 0.01], [0.55, 0.72, 0.01], [0.25, 0.68, 0.01], [-0.05, 0.72, 0.01]],
+   110→        width: 0.5,
+   111→      },
+   112→      // 5. Left cheek contour
+   113→      {
+   114→        pts: [[-0.62, -0.05, 0.01], [-0.75, -0.15, 0.01], [-0.82, -0.32, 0.01], [-0.76, -0.5, 0.01], [-0.58, -0.66, 0.01]],
+   115→        width: 0.7,
+   116→      },
+   117→      // 6. Right cheek contour
+   118→      {
+   119→        pts: [[0.62, -0.05, 0.01], [0.75, -0.15, 0.01], [0.82, -0.32, 0.01], [0.76, -0.5, 0.01], [0.58, -0.66, 0.01]],
+   120→        width: 0.7,
+   121→      },
+   122→      // 7. Center forehead vertical
+   123→      {
+   124→        pts: [[0, 0.95, 0.01], [0, 0.78, 0.01], [0, 0.55, 0.01]],
+   125→        width: 0.5,
+   126→      },
+   127→      // 8. Left temple → jaw
+   128→      {
+   129→        pts: [[-1.0, 0.02, 0.01], [-0.92, 0.02, 0.01], [-0.92, -0.4, 0.01], [-0.82, -0.4, 0.01], [-0.82, -0.72, 0.01]],
+   130→        width: 0.5,
+   131→      },
+   132→      // 9. Right temple → jaw
+   133→      {
+   134→        pts: [[1.0, 0.02, 0.01], [0.92, 0.02, 0.01], [0.92, -0.4, 0.01], [0.82, -0.4, 0.01], [0.82, -0.72, 0.01]],
+   135→        width: 0.5,
+   136→      },
+   137→      // 10. Nose bridge → left cheek diagonal
+   138→      {
+   139→        pts: [[-0.04, -0.02, 0.02], [-0.15, -0.1, 0.02], [-0.28, -0.1, 0.02], [-0.32, -0.22, 0.02]],
+   140→        width: 0.6,
+   141→      },
+   142→      // 11. Nose bridge → right cheek diagonal
+   143→      {
+   144→        pts: [[0.04, -0.02, 0.02], [0.15, -0.1, 0.02], [0.28, -0.1, 0.02], [0.32, -0.22, 0.02]],
+   145→        width: 0.6,
+   146→      },
+   147→    ];
+   148→    return paths;
+   149→  }, []);
+   150→
+   151→  return (
+   152→    <group>
+   153→      {lines.map((line, i) => (
+   154→        <Line key={i} points={line.pts} color={color} lineWidth={line.width} transparent opacity={opacity * 0.2} />
+   155→      ))}
+   156→    </group>
+   157→  );
+   158→}
+   159→
+   160→/* ================================================================
+   161→   SCAN LINE – Horizontal holographic sweep
+   162→   ================================================================ */
+   163→
+   164→function ScanLine({ color }: { color: string }) {
+   165→  const ref = useRef<THREE.Mesh>(null);
+   166→  useFrame(({ clock }) => {
+   167→    if (ref.current) {
+   168→      ref.current.position.y = Math.sin(clock.getElapsedTime() * 0.5) * 1.2;
+   169→    }
+   170→  });
+   171→  return (
+   172→    <mesh ref={ref}>
+   173→      <planeGeometry args={[2.6, 0.01]} />
+   174→      <meshBasicMaterial color={color} transparent opacity={0.2} blending={THREE.AdditiveBlending} depthWrite={false} side={THREE.DoubleSide} />
+   175→    </mesh>
+   176→  );
+   177→}
+   178→
+   179→/* ================================================================
+   180→   HEAD WIREFRAME – Face with eye tracking, blinking, state colors
+   181→   ================================================================ */
+   182→
+   183→function HeadWireframe() {
+   184→  const mouthOpen = useJarvisStore((s) => s.mouthOpen);
+   185→  const agentState = useJarvisStore((s) => s.agentState);
+   186→
+   187→  /* ── Mouse tracking (module-level shared) ───────────────────── */
+   188→  useEffect(() => {
+   189→    const handler = (e: MouseEvent) => {
+   190→      _mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+   191→      _mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+   192→    };
+   193→    window.addEventListener('mousemove', handler);
+   194→    return () => window.removeEventListener('mousemove', handler);
+   195→  }, []);
+   196→
+   197→  /* ── Refs ───────────────────────────────────────────────────── */
+   198→  const leftEyeRef = useRef<THREE.Group>(null);
+   199→  const rightEyeRef = useRef<THREE.Group>(null);
+   200→  const leftIrisRef = useRef<THREE.Group>(null);
+   201→  const rightIrisRef = useRef<THREE.Group>(null);
+   202→
+   203→  /* ── Blink + eye tracking in useFrame ──────────────────────── */
+   204→  useFrame((_, delta) => {
+   205→    // Blink logic
+   206→    if (_blink.active) {
+   207→      _blink.elapsed += delta;
+   208→      if (_blink.elapsed < 0.075) {
+   209→        _blink.scale = 0.05;
+   210→      } else {
+   211→        _blink.scale = 1;
+   212→        _blink.active = false;
+   213→        _blink.elapsed = 0;
+   214→        _blink.timer = 0;
+   215→        _blink.nextBlink = 3 + Math.random() * 2;
+   216→      }
+   217→    } else {
+   218→      _blink.timer += delta;
+   219→      if (_blink.timer >= _blink.nextBlink) {
+   220→        _blink.active = true;
+   221→        _blink.elapsed = 0;
+   222→        _blink.scale = 0.05;
+   223→      }
+   224→    }
+   225→
+   226→    const bScale = _blink.scale;
+   227→    const mx = _mouse.x * 0.04;
+   228→    const my = _mouse.y * 0.04;
+   229→
+   230→    if (leftEyeRef.current) leftEyeRef.current.scale.y = bScale;
+   231→    if (rightEyeRef.current) rightEyeRef.current.scale.y = bScale;
+   232→    if (leftIrisRef.current) { leftIrisRef.current.position.x = mx; leftIrisRef.current.position.y = my; }
+   233→    if (rightIrisRef.current) { rightIrisRef.current.position.x = mx; rightIrisRef.current.position.y = my; }
+   234→  });
+   235→
+   236→  /* ── State-reactive colors ─────────────────────────────────── */
+   237→  const colors = useMemo(() => getStateColors(agentState), [agentState]);
+   238→  const baseOpacity = agentState === 'idle' ? 0.6 : agentState === 'thinking' ? 0.8 : 1.0;
+   239→
+   240→  /* ── Geometries ────────────────────────────────────────────── */
+   241→  const headOutline = useMemo(() => {
+   242→    const pts: [number, number, number][] = [];
+   243→    for (let i = 0; i <= 64; i++) {
+   244→      const a = (i / 64) * Math.PI * 2;
+   245→      let r = 1.3;
+   246→      const y = Math.sin(a);
+   247→      if (y < 0) r += y * 0.25;
+   248→      if (Math.abs(Math.cos(a)) < 0.9) r += 0.06;
+   249→      if (y > 0.7) r += 0.04;
+   250→      pts.push([Math.cos(a) * r, Math.sin(a) * r * 1.15, 0]);
+   251→    }
+   252→    return pts;
+   253→  }, []);
+   254→
+   255→  const leftEye = useMemo(() => ellipsePoints(-0.38, 0.25, 0.22, 0.1, 32), []);
+   256→  const rightEye = useMemo(() => ellipsePoints(0.38, 0.25, 0.22, 0.1, 32), []);
+   257→  const leftIris = useMemo(() => ellipsePoints(-0.38, 0.25, 0.09, 0.09, 24), []);
+   258→  const rightIris = useMemo(() => ellipsePoints(0.38, 0.25, 0.09, 0.09, 24), []);
+   259→
+   260→  const noseBridge = useMemo(() => [[0, 0.42, 0.02], [0, 0.02, 0.05]] as [number, number, number][], []);
+   261→  const noseLeft = useMemo(() => [[0, 0.02, 0.05], [-0.1, -0.12, 0.03], [0, -0.16, 0.03]] as [number, number, number][], []);
+   262→  const noseRight = useMemo(() => [[0, 0.02, 0.05], [0.1, -0.12, 0.03], [0, -0.16, 0.03]] as [number, number, number][], []);
+   263→
+   264→  const mouthUpper = useMemo(() => {
+   265→    const pts: [number, number, number][] = [];
+   266→    for (let i = 0; i <= 20; i++) {
+   267→      const t2 = i / 20;
+   268→      const x = (t2 - 0.5) * 2 * 0.25;
+   269→      const curve = -Math.abs(t2 - 0.5) * 2 * 0.04;
+   270→      pts.push([x, -0.45 + curve, 0.03]);
+   271→    }
+   272→    return pts;
+   273→  }, []);
+   274→
+   275→  const mouthLower = useMemo(() => {
+   276→    const mo = mouthOpen * 0.1;
+   277→    const pts: [number, number, number][] = [];
+   278→    for (let i = 0; i <= 20; i++) {
+   279→      const t2 = i / 20;
+   280→      const x = (t2 - 0.5) * 2 * 0.25;
+   281→      const curve = Math.abs(t2 - 0.5) * 2 * 0.05 + mo;
+   282→      pts.push([x, -0.45 + curve, 0.03]);
+   283→    }
+   284→    return pts;
+   285→  }, [mouthOpen]);
+   286→
+   287→  const leftBrow = useMemo(() => {
+   288→    const pts: [number, number, number][] = [];
+   289→    for (let i = 0; i <= 16; i++) {
+   290→      const t2 = i / 16;
+   291→      pts.push([-0.58 + t2 * 0.4, 0.44 + Math.sin(t2 * Math.PI) * 0.07, 0.02]);
+   292→    }
+   293→    return pts;
+   294→  }, []);
+   295→
+   296→  const rightBrow = useMemo(() => {
+   297→    const pts: [number, number, number][] = [];
+   298→    for (let i = 0; i <= 16; i++) {
+   299→      const t2 = i / 16;
+   300→      pts.push([0.58 - t2 * 0.4, 0.44 + Math.sin(t2 * Math.PI) * 0.07, 0.02]);
+   301→    }
+   302→    return pts;
+   303→  }, []);
+   304→
+   305→  const jawLine = useMemo(() => {
+   306→    const pts: [number, number, number][] = [];
+   307→    for (let i = 0; i <= 30; i++) {
+   308→      const t2 = i / 30;
+   309→      const a = Math.PI * 0.6 + t2 * Math.PI * 0.8;
+   310→      let r = 1.32;
+   311→      const y = Math.sin(a);
+   312→      if (y < 0) r += y * 0.3;
+   313→      pts.push([Math.cos(a) * r, Math.sin(a) * r * 1.15, -0.03]);
+   314→    }
+   315→    return pts;
+   316→  }, []);
+   317→
+   318→  return (
+   319→    <group>
+   320→      {/* Head outline */}
+   321→      <Line points={headOutline} color={colors.circuitry} lineWidth={1.2} transparent opacity={baseOpacity * 0.5} />
+   322→      <Line points={jawLine} color={colors.circuitry} lineWidth={1} transparent opacity={baseOpacity * 0.4} />
+   323→
+   324→      {/* ── Left Eye (blink + tracking) ────────────────────── */}
+   325→      <group ref={leftEyeRef}>
+   326→        <Line points={leftEye} color={colors.eye} lineWidth={2} transparent opacity={baseOpacity * 0.9} />
+   327→        <group ref={leftIrisRef}>
+   328→          <Line points={leftIris} color={colors.eye} lineWidth={1.5} transparent opacity={baseOpacity} />
+   329→        </group>
+   330→      </group>
+   331→
+   332→      {/* ── Right Eye (blink + tracking) ───────────────────── */}
+   333→      <group ref={rightEyeRef}>
+   334→        <Line points={rightEye} color={colors.eye} lineWidth={2} transparent opacity={baseOpacity * 0.9} />
+   335→        <group ref={rightIrisRef}>
+   336→          <Line points={rightIris} color={colors.eye} lineWidth={1.5} transparent opacity={baseOpacity} />
+   337→        </group>
+   338→      </group>
+   339→
+   340→      {/* Nose */}
+   341→      <Line points={noseBridge} color={colors.eye} lineWidth={1.5} transparent opacity={baseOpacity * 0.7} />
+   342→      <Line points={noseLeft} color={colors.eye} lineWidth={1.2} transparent opacity={baseOpacity * 0.6} />
+   343→      <Line points={noseRight} color={colors.eye} lineWidth={1.2} transparent opacity={baseOpacity * 0.6} />
+   344→
+   345→      {/* Mouth */}
+   346→      <Line points={mouthUpper} color={colors.mouth} lineWidth={2} transparent opacity={baseOpacity * 0.9} />
+   347→      <Line points={mouthLower} color={colors.mouth} lineWidth={2} transparent opacity={baseOpacity * 0.9} />
+   348→
+   349→      {/* Eyebrows */}
+   350→      <Line points={leftBrow} color={colors.eye} lineWidth={2.5} transparent opacity={baseOpacity * 0.85} />
+   351→      <Line points={rightBrow} color={colors.eye} lineWidth={2.5} transparent opacity={baseOpacity * 0.85} />
+   352→
+   353→      {/* ── Inner Circuitry Lines ──────────────────────────── */}
+   354→      <CircuitryLines opacity={baseOpacity} color={colors.circuitry} />
+   355→
+   356→      {/* ── Scan Line ──────────────────────────────────────── */}
+   357→      <ScanLine color={colors.scanLine} />
+   358→    </group>
+   359→  );
+   360→}
+   361→
+   362→/* ================================================================
+   363→   EYE GLOW – Bright pupil dots with blink & tracking
+   364→   ================================================================ */
+   365→
+   366→function EyeGlow() {
+   367→  const matRef = useRef<THREE.ShaderMaterial>(null);
+   368→  const geo = useMemo(() => {
+   369→    const g = new THREE.BufferGeometry();
+   370→    g.setAttribute('position', new THREE.Float32BufferAttribute(
+   371→      [[-0.38, 0.25, 0.06], [0.38, 0.25, 0.06]].flat(), 3,
+   372→    ));
+   373→    return g;
+   374→  }, []);
+   375→
+   376→  const colorObj = useMemo(() => new THREE.Color(), []);
+   377→
+   378→  useFrame(({ clock }) => {
+   379→    if (!matRef.current) return;
+   380→    matRef.current.uniforms.uTime.value = clock.getElapsedTime();
+   381→    const state = useJarvisStore.getState().agentState;
+   382→    colorObj.set(getStateColors(state).eye);
+   383→    matRef.current.uniforms.uColor.value = colorObj;
+   384→    matRef.current.uniforms.uBlink.value = _blink.scale;
+   385→    matRef.current.uniforms.uMouseX.value = _mouse.x * 0.04;
+   386→    matRef.current.uniforms.uMouseY.value = _mouse.y * 0.04;
+   387→  });
+   388→
+   389→  return (
+   390→    <points geometry={geo}>
+   391→      <shaderMaterial
+   392→        ref={matRef}
+   393→        uniforms={{
+   394→          uTime: { value: 0 },
+   395→          uColor: { value: new THREE.Color('#00e8ff') },
+   396→          uBlink: { value: 1 },
+   397→          uMouseX: { value: 0 },
+   398→          uMouseY: { value: 0 },
+   399→        }}
+   400→        vertexShader={`
+   401→          uniform float uTime;
+   402→          uniform float uMouseX;
+   403→          uniform float uMouseY;
+   404→          void main() {
+   405→            vec3 p = position;
+   406→            p.x += uMouseX;
+   407→            p.y += uMouseY;
+   408→            vec4 mv = modelViewMatrix * vec4(p, 1.0);
+   409→            gl_Position = projectionMatrix * mv;
+   410→            gl_PointSize = 8.0 * (200.0 / -mv.z);
+   411→          }
+   412→        `}
+   413→        fragmentShader={`
+   414→          uniform vec3 uColor;
+   415→          uniform float uBlink;
+   416→          void main() {
+   417→            float d = length(gl_PointCoord - vec2(0.5));
+   418→            if (d > 0.5) discard;
+   419→            float g = 1.0 - smoothstep(0.0, 0.5, d);
+   420→            vec3 c = mix(uColor * 0.7, vec3(1.0), pow(g, 2.5));
+   421→            gl_FragColor = vec4(c, g * 0.9 * uBlink);
+   422→          }
+   423→        `}
+   424→        transparent
+   425→        depthWrite={false}
+   426→        blending={THREE.AdditiveBlending}
+   427→      />
+   428→    </points>
+   429→  );
+   430→}
+   431→
+   432→/* ================================================================
+   433→   PARTICLE CLOUD – Holographic particles around head (state color)
+   434→   ================================================================ */
+   435→
+   436→function ParticleCloud() {
+   437→  const matRef = useRef<THREE.ShaderMaterial>(null);
+   438→  const colorObj = useMemo(() => new THREE.Color(), []);
+   439→
+   440→  const { geometry, uniforms } = useMemo(() => {
+   441→    const count = 1500;
+   442→    const pos = new Float32Array(count * 3);
+   443→    const sz = new Float32Array(count);
+   444→    const rnd = new Float32Array(count);
+   445→    for (let i = 0; i < count; i++) {
+   446→      const theta = Math.random() * Math.PI * 2;
+   447→      const phi = Math.acos(2 * Math.random() - 1);
+   448→      const r = 1.35 + Math.random() * 0.5;
+   449→      pos[i * 3] = Math.sin(phi) * Math.cos(theta) * r;
+   450→      pos[i * 3 + 1] = Math.sin(phi) * Math.sin(theta) * r * 1.15;
+   451→      pos[i * 3 + 2] = Math.cos(phi) * r * 0.7;
+   452→      sz[i] = Math.random() * 1.5 + 0.3;
+   453→      rnd[i] = Math.random();
+   454→    }
+   455→    const geo = new THREE.BufferGeometry();
+   456→    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+   457→    geo.setAttribute('aSize', new THREE.Float32BufferAttribute(sz, 1));
+   458→    geo.setAttribute('aRandom', new THREE.Float32BufferAttribute(rnd, 1));
+   459→    return {
+   460→      geometry: geo,
+   461→      uniforms: {
+   462→        uTime: { value: 0 },
+   463→        uColor: { value: new THREE.Color('#00d4ff') },
+   464→      },
+   465→    };
+   466→  }, []);
+   467→
+   468→  useFrame(({ clock }) => {
+   469→    if (!matRef.current) return;
+   470→    matRef.current.uniforms.uTime.value = clock.getElapsedTime();
+   471→    const state = useJarvisStore.getState().agentState;
+   472→    colorObj.set(getStateColors(state).particle);
+   473→    matRef.current.uniforms.uColor.value = colorObj;
+   474→  });
+   475→
+   476→  return (
+   477→    <points geometry={geometry} frustumCulled={false}>
+   478→      <shaderMaterial
+   479→        ref={matRef}
+   480→        uniforms={uniforms}
+   481→        vertexShader={`
+   482→          uniform float uTime;
+   483→          attribute float aSize;
+   484→          attribute float aRandom;
+   485→          varying float vA;
+   486→          void main() {
+   487→            vec3 p = position + 0.03 * sin(uTime * 0.5 + aRandom * 6.28) * normalize(position);
+   488→            vec4 mv = modelViewMatrix * vec4(p, 1.0);
+   489→            gl_Position = projectionMatrix * mv;
+   490→            gl_PointSize = max(0.5, aSize * (120.0 / -mv.z));
+   491→            vA = 0.12 + 0.08 * sin(uTime + aRandom * 6.28);
+   492→          }
+   493→        `}
+   494→        fragmentShader={`
+   495→          uniform vec3 uColor;
+   496→          varying float vA;
+   497→          void main() {
+   498→            float d = length(gl_PointCoord - vec2(0.5));
+   499→            if (d > 0.5) discard;
+   500→            float g = pow(1.0 - d * 2.0, 2.0);
+   501→            gl_FragColor = vec4(uColor, g * vA);
+   502→          }
+   503→        `}
+   504→        transparent
+   505→        depthWrite={false}
+   506→        blending={THREE.AdditiveBlending}
+   507→      />
+   508→    </points>
+   509→  );
+   510→}
+   511→
+   512→/* ================================================================
+   513→   BACKGROUND PARTICLES – 500 particles with star-like & rotation
+   514→   ================================================================ */
+   515→
+   516→function BackgroundParticles() {
+   517→  const matRef = useRef<THREE.ShaderMaterial>(null);
+   518→  const groupRef = useRef<THREE.Group>(null);
+   519→
+   520→  const { geometry, uniforms } = useMemo(() => {
+   521→    const count = 500;
+   522→    const pos = new Float32Array(count * 3);
+   523→    const sz = new Float32Array(count);
+   524→    const rnd = new Float32Array(count);
+   525→    const star = new Float32Array(count);
+   526→    for (let i = 0; i < count; i++) {
+   527→      pos[i * 3] = (Math.random() - 0.5) * 14;
+   528→      pos[i * 3 + 1] = (Math.random() - 0.5) * 14;
+   529→      pos[i * 3 + 2] = (Math.random() - 0.5) * 14;
+   530→      const isStar = i < 100; // 20% are star-like
+   531→      sz[i] = isStar ? Math.random() * 3 + 2.0 : Math.random() * 2 + 0.5;
+   532→      rnd[i] = Math.random();
+   533→      star[i] = isStar ? 1.0 : 0.0;
+   534→    }
+   535→    const geo = new THREE.BufferGeometry();
+   536→    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+   537→    geo.setAttribute('aSize', new THREE.Float32BufferAttribute(sz, 1));
+   538→    geo.setAttribute('aRandom', new THREE.Float32BufferAttribute(rnd, 1));
+   539→    geo.setAttribute('aStar', new THREE.Float32BufferAttribute(star, 1));
+   540→    return { geometry: geo, uniforms: { uTime: { value: 0 } } };
+   541→  }, []);
+   542→
+   543→  useFrame(({ clock }) => {
+   544→    if (matRef.current) matRef.current.uniforms.uTime.value = clock.getElapsedTime();
+   545→    if (groupRef.current) {
+   546→      groupRef.current.rotation.y = clock.getElapsedTime() * 0.015;
+   547→      groupRef.current.rotation.x = Math.sin(clock.getElapsedTime() * 0.008) * 0.08;
+   548→    }
+   549→  });
+   550→
+   551→  return (
+   552→    <group ref={groupRef}>
+   553→      <points geometry={geometry} frustumCulled={false}>
+   554→        <shaderMaterial
+   555→          ref={matRef}
+   556→          uniforms={uniforms}
+   557→          vertexShader={`
+   558→            uniform float uTime;
+   559→            attribute float aSize;
+   560→            attribute float aRandom;
+   561→            attribute float aStar;
+   562→            varying float vA;
+   563→            varying float vStar;
+   564→            void main() {
+   565→              vec3 p = position;
+   566→              p.y += sin(uTime * 0.3 + aRandom * 6.28) * 0.4;
+   567→              p.x += cos(uTime * 0.2 + aRandom * 3.14) * 0.3;
+   568→              vec4 mv = modelViewMatrix * vec4(p, 1.0);
+   569→              gl_Position = projectionMatrix * mv;
+   570→              float size = aSize * (1.0 + aStar * 0.5);
+   571→              gl_PointSize = max(0.5, size * (80.0 / -mv.z));
+   572→              float twinkle = 0.7 + 0.3 * sin(uTime * (1.5 + aStar * 3.0) + aRandom * 6.28);
+   573→              vA = (0.15 + 0.15 * sin(uTime * 0.8 + aRandom * 6.28)) * (0.6 + aStar * 0.8) * twinkle;
+   574→              vStar = aStar;
+   575→            }
+   576→          `}
+   577→          fragmentShader={`
+   578→            varying float vA;
+   579→            varying float vStar;
+   580→            void main() {
+   581→              float d = length(gl_PointCoord - vec2(0.5));
+   582→              if (d > 0.5) discard;
+   583→              float g = pow(1.0 - d * 2.0, 2.0);
+   584→              float core = 1.0 - smoothstep(0.0, 0.12 + (1.0 - vStar) * 0.15, d);
+   585→              vec3 col = mix(vec3(0.0, 0.83, 1.0), vec3(0.85, 0.95, 1.0), core * vStar);
+   586→              gl_FragColor = vec4(col, g * vA * 0.3);
+   587→            }
+   588→          `}
+   589→          transparent
+   590→          depthWrite={false}
+   591→          blending={THREE.AdditiveBlending}
+   592→        />
+   593→      </points>
+   594→    </group>
+   595→  );
+   596→}
+   597→
+   598→/* ================================================================
+   599→   DATA STREAM PARTICLES – 100 upward-flowing particles along HUD ring
+   600→   ================================================================ */
+   601→
+   602→function DataStreamParticles() {
+   603→  const matRef = useRef<THREE.ShaderMaterial>(null);
+   604→  const colorObj = useMemo(() => new THREE.Color(), []);
+   605→
+   606→  const { geometry, uniforms } = useMemo(() => {
+   607→    const count = 100;
+   608→    const dummyPos = new Float32Array(count * 3);
+   609→    const angles = new Float32Array(count);
+   610→    const phases = new Float32Array(count);
+   611→    const randoms = new Float32Array(count);
+   612→    for (let i = 0; i < count; i++) {
+   613→      angles[i] = (i / count) * Math.PI * 2 + Math.random() * 0.4;
+   614→      phases[i] = Math.random();
+   615→      randoms[i] = Math.random();
+   616→    }
+   617→    const geo = new THREE.BufferGeometry();
+   618→    geo.setAttribute('position', new THREE.Float32BufferAttribute(dummyPos, 3));
+   619→    geo.setAttribute('aAngle', new THREE.Float32BufferAttribute(angles, 1));
+   620→    geo.setAttribute('aPhase', new THREE.Float32BufferAttribute(phases, 1));
+   621→    geo.setAttribute('aRandom', new THREE.Float32BufferAttribute(randoms, 1));
+   622→    return {
+   623→      geometry: geo,
+   624→      uniforms: {
+   625→        uTime: { value: 0 },
+   626→        uColor: { value: new THREE.Color('#00e8ff') },
+   627→      },
+   628→    };
+   629→  }, []);
+   630→
+   631→  useFrame(({ clock }) => {
+   632→    if (!matRef.current) return;
+   633→    matRef.current.uniforms.uTime.value = clock.getElapsedTime();
+   634→    const state = useJarvisStore.getState().agentState;
+   635→    colorObj.set(getStateColors(state).dataStream);
+   636→    matRef.current.uniforms.uColor.value = colorObj;
+   637→  });
+   638→
+   639→  return (
+   640→    <group rotation={[0.12, 0, 0.04]}>
+   641→      <points geometry={geometry} frustumCulled={false}>
+   642→        <shaderMaterial
+   643→          ref={matRef}
+   644→          uniforms={uniforms}
+   645→          vertexShader={`
+   646→            uniform float uTime;
+   647→            attribute float aAngle;
+   648→            attribute float aPhase;
+   649→            attribute float aRandom;
+   650→            varying float vAlpha;
+   651→            void main() {
+   652→              float radius = 1.85;
+   653→              float speed = 0.18 + aRandom * 0.12;
+   654→              float cycleLen = 3.5;
+   655→              float t = mod(aPhase + uTime * speed / cycleLen, 1.0);
+   656→
+   657→              float y = t * 3.0 - 1.5;
+   658→              float x = cos(aAngle) * radius;
+   659→              float z = sin(aAngle) * radius;
+   660→
+   661→              vAlpha = (1.0 - t) * 0.55;
+   662→              vAlpha *= 0.5 + 0.5 * sin(uTime * 2.5 + aRandom * 6.28);
+   663→
+   664→              vec4 mv = modelViewMatrix * vec4(x, y, z, 1.0);
+   665→              gl_Position = projectionMatrix * mv;
+   666→              gl_PointSize = max(1.0, (1.5 + aRandom * 1.2) * (100.0 / -mv.z));
+   667→            }
+   668→          `}
+   669→          fragmentShader={`
+   670→            uniform vec3 uColor;
+   671→            varying float vAlpha;
+   672→            void main() {
+   673→              float d = length(gl_PointCoord - vec2(0.5));
+   674→              if (d > 0.5) discard;
+   675→              float g = 1.0 - d * 2.0;
+   676→              gl_FragColor = vec4(uColor, g * g * vAlpha);
+   677→            }
+   678→          `}
+   679→          transparent
+   680→          depthWrite={false}
+   681→          blending={THREE.AdditiveBlending}
+   682→        />
+   683→      </points>
+   684→    </group>
+   685→  );
+   686→}
+   687→
+   688→/* ================================================================
+   689→   HUD RING – Rotating HUD ring with ticks and arcs (state color)
+   690→   ================================================================ */
+   691→
+   692→function HudRing({
+   693→  radius, tiltX, tiltZ, tickCount, majorEvery, speed, opacity, arcs,
+   694→}: {
+   695→  radius: number; tiltX: number; tiltZ: number; tickCount: number; majorEvery: number; speed: number; opacity: number;
+   696→  arcs?: { start: number; end: number; segments: number }[];
+   697→}) {
+   698→  const ref = useRef<THREE.Group>(null);
+   699→  const agentState = useJarvisStore((s) => s.agentState);
+   700→  const ringColor = getStateColors(agentState).hudRing;
+   701→  const speedMult = agentState === 'thinking' ? 2.5 : 1;
+   702→
+   703→  const { tickGeo, arcGeos } = useMemo(() => {
+   704→    const tp: number[] = [];
+   705→    for (let i = 0; i < tickCount; i++) {
+   706→      const a = (i / tickCount) * Math.PI * 2;
+   707→      const len = i % majorEvery === 0 ? 0.16 : 0.07;
+   708→      const inner = radius - len / 2;
+   709→      const outer = radius + len / 2;
+   710→      tp.push(Math.cos(a) * inner, 0, Math.sin(a) * inner, Math.cos(a) * outer, 0, Math.sin(a) * outer);
+   711→    }
+   712→    const tGeo = new THREE.BufferGeometry();
+   713→    tGeo.setAttribute('position', new THREE.Float32BufferAttribute(tp, 3));
+   714→    const aGeos: THREE.BufferGeometry[] = [];
+   715→    if (arcs) arcs.forEach((arc) => {
+   716→      const ap: number[] = [];
+   717→      const step = (arc.end - arc.start) / arc.segments;
+   718→      for (let j = 0; j < arc.segments; j++) {
+   719→        const a1 = arc.start + step * j;
+   720→        const a2 = arc.start + step * (j + 1);
+   721→        ap.push(Math.cos(a1) * radius, 0, Math.sin(a1) * radius, Math.cos(a2) * radius, 0, Math.sin(a2) * radius);
+   722→      }
+   723→      const g = new THREE.BufferGeometry();
+   724→      g.setAttribute('position', new THREE.Float32BufferAttribute(ap, 3));
+   725→      aGeos.push(g);
+   726→    });
+   727→    return { tickGeo: tGeo, arcGeos: aGeos };
+   728→  }, [radius, tickCount, majorEvery, arcs]);
+   729→
+   730→  useFrame((_, delta) => {
+   731→    if (ref.current) ref.current.rotation.y += delta * speed * speedMult;
+   732→  });
+   733→
+   734→  return (
+   735→    <group ref={ref} rotation={[tiltX, 0, tiltZ]}>
+   736→      <lineSegments geometry={tickGeo}>
+   737→        <lineBasicMaterial color={ringColor} transparent opacity={opacity} blending={THREE.AdditiveBlending} depthWrite={false} />
+   738→      </lineSegments>
+   739→      {arcGeos.map((g, i) => (
+   740→        <lineSegments key={i} geometry={g}>
+   741→          <lineBasicMaterial color={ringColor} transparent opacity={opacity * 0.5} blending={THREE.AdditiveBlending} depthWrite={false} />
+   742→        </lineSegments>
+   743→      ))}
+   744→      <mesh rotation={[Math.PI / 2, 0, 0]}>
+   745→        <ringGeometry args={[radius - 0.005, radius + 0.005, 128]} />
+   746→        <meshBasicMaterial color={ringColor} transparent opacity={opacity * 0.2} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} depthWrite={false} />
+   747→      </mesh>
+   748→    </group>
+   749→  );
+   750→}
+   751→
+   752→/* ================================================================
+   753→   INNER GLOW – Atmospheric glow spheres (primary + larger faint)
+   754→   ================================================================ */
+   755→
+   756→function InnerGlow() {
+   757→  const ref1 = useRef<THREE.Mesh>(null);
+   758→  const ref2 = useRef<THREE.Mesh>(null);
+   759→  const colorObj = useMemo(() => new THREE.Color(), []);
+   760→
+   761→  useFrame(({ clock }) => {
+   762→    const t = clock.getElapsedTime();
+   763→    if (ref1.current) ref1.current.scale.setScalar(0.9 + 0.08 * Math.sin(t * 1.5));
+   764→    if (ref2.current) ref2.current.scale.setScalar(0.92 + 0.06 * Math.sin(t * 1.2 + 1.0));
+   765→    const state = useJarvisStore.getState().agentState;
+   766→    colorObj.set(getStateColors(state).innerGlow);
+   767→    if (ref1.current) (ref1.current.material as THREE.MeshBasicMaterial).color.copy(colorObj);
+   768→    if (ref2.current) (ref2.current.material as THREE.MeshBasicMaterial).color.copy(colorObj);
+   769→  });
+   770→
+   771→  return (
+   772→    <group>
+   773→      {/* Primary inner glow */}
+   774→      <mesh ref={ref1}>
+   775→        <sphereGeometry args={[1.15, 32, 32]} />
+   776→        <meshBasicMaterial color="#00d4ff" transparent opacity={0.012} side={THREE.BackSide} blending={THREE.AdditiveBlending} depthWrite={false} />
+   777→      </mesh>
+   778→      {/* Larger atmospheric depth glow */}
+   779→      <mesh ref={ref2}>
+   780→        <sphereGeometry args={[1.4, 32, 32]} />
+   781→        <meshBasicMaterial color="#00d4ff" transparent opacity={0.006} side={THREE.BackSide} blending={THREE.AdditiveBlending} depthWrite={false} />
+   782→      </mesh>
+   783→    </group>
+   784→  );
+   785→}
+   786→
+   787→/* ================================================================
+   788→   MAIN SCENE – Composition with head tilt
+   789→   ================================================================ */
+   790→
+   791→function JarvisScene() {
+   792→  const headRef = useRef<THREE.Group>(null);
+   793→  const baseAngleRef = useRef(0);
+   794→
+   795→  useFrame((state, delta) => {
+   796→    if (!headRef.current) return;
+   797→    const { agentState } = useJarvisStore.getState();
+   798→    const t = state.clock.getElapsedTime();
+   799→
+   800→    // Base Y rotation speed (faster when thinking)
+   801→    let ySpeed = agentState === 'thinking' ? 0.25 : agentState === 'speaking' ? 0.08 : 0.05;
+   802→    baseAngleRef.current += delta * ySpeed;
+   803→
+   804→    // Y oscillation (side-to-side sway when speaking)
+   805→    let yOscillation = 0;
+   806→    if (agentState === 'speaking') {
+   807→      yOscillation = 0.06 * Math.sin(t * 1.8);
+   808→    }
+   809→
+   810→    // X rotation (subtle idle oscillation + forward lean when listening)
+   811→    let xRot = 0.01 * Math.sin(t * 0.5);
+   812→    if (agentState === 'listening') {
+   813→      xRot += 0.03;
+   814→    }
+   815→
+   816→    // Z rotation (head tilt when thinking)
+   817→    let zRot = 0;
+   818→    if (agentState === 'thinking') {
+   819→      zRot = 0.03 * Math.sin(t * 1.2);
+   820→    }
+   821→
+   822→    headRef.current.rotation.y = baseAngleRef.current + yOscillation;
+   823→    headRef.current.rotation.x = xRot;
+   824→    headRef.current.rotation.z = zRot;
+   825→  });
+   826→
+   827→  return (
+   828→    <>
+   829→      <Float speed={1.5} rotationIntensity={0} floatIntensity={0.08}>
+   830→        <group ref={headRef}>
+   831→          <InnerGlow />
+   832→          <HeadWireframe />
+   833→          <EyeGlow />
+   834→          <ParticleCloud />
+   835→          <DataStreamParticles />
+   836→          <HudRing
+   837→            radius={1.85} tiltX={0.12} tiltZ={0.04} tickCount={72} majorEvery={6} speed={0.1} opacity={0.3}
+   838→            arcs={[
+   839→              { start: 0.2, end: 0.8, segments: 20 },
+   840→              { start: 2.4, end: 3.0, segments: 16 },
+   841→              { start: 4.2, end: 4.7, segments: 12 },
+   842→            ]}
+   843→          />
+   844→          <HudRing radius={2.05} tiltX={1.0} tiltZ={0.25} tickCount={48} majorEvery={4} speed={-0.06} opacity={0.15} />
+   845→        </group>
+   846→      </Float>
+   847→      <BackgroundParticles />
+   848→      <EffectComposer>
+   849→        <Bloom intensity={0.7} luminanceThreshold={0.2} luminanceSmoothing={0.9} mipmapBlur />
+   850→      </EffectComposer>
+   851→    </>
+   852→  );
+   853→}
+   854→
+   855→/* ================================================================
+   856→   EXPORT
+   857→   ================================================================ */
+   858→
+   859→export default function JarvisFace() {
+   860→  return (
+   861→    <div className="w-full h-full">
+   862→      <Canvas
+   863→        camera={{ position: [0, 0, 4.5], fov: 38 }}
+   864→        gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}
+   865→        dpr={[1, 2]}
+   866→        style={{ background: 'transparent' }}
+   867→      >
+   868→        <JarvisScene />
+   869→      </Canvas>
+   870→    </div>
+   871→  );
+   872→}
+   873→

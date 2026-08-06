@@ -83,14 +83,41 @@ const SOUND_PROFILES: Record<string, SoundProfile> = {
     attack: 0.005,
     decay: 0.055,
   },
+  success: {
+    freqStart: 523,
+    freqEnd: 1047,
+    duration: 0.2,
+    volume: 0.3,
+    type: 'sine',
+    attack: 0.01,
+    decay: 0.19,
+  },
+  notification: {
+    freqStart: 880,
+    freqEnd: 880,
+    duration: 0.1,
+    volume: 0.2,
+    type: 'sine',
+    attack: 0.005,
+    decay: 0.095,
+  },
+  backchannel: {
+    freqStart: 300,
+    freqEnd: 350,
+    duration: 0.08,
+    volume: 0.15,
+    type: 'sine',
+    attack: 0.01,
+    decay: 0.07,
+  },
 };
 
 /**
  * Plays a short sci-fi sound effect using the Web Audio API.
  *
- * @param type — one of 'send' | 'receive' | 'wake' | 'error' | 'click'
+ * @param type — one of 'send' | 'receive' | 'wake' | 'error' | 'click' | 'success' | 'notification' | 'backchannel'
  */
-export function playSoundEffect(type: 'send' | 'receive' | 'wake' | 'error' | 'click'): void {
+export function playSoundEffect(type: 'send' | 'receive' | 'wake' | 'error' | 'click' | 'success' | 'notification' | 'backchannel'): void {
   if (typeof window === 'undefined') return;
 
   const profile = SOUND_PROFILES[type];
@@ -104,6 +131,13 @@ export function playSoundEffect(type: 'send' | 'receive' | 'wake' | 'error' | 'c
     if (type === 'wake') {
       playTone(ctx, now, { ...profile, freqStart: 523, freqEnd: 523 });
       playTone(ctx, now + 0.14, { ...profile, freqStart: 784, freqEnd: 784 });
+      return;
+    }
+
+    // Special handling for "notification" — two-note chime
+    if (type === 'notification') {
+      playTone(ctx, now, { ...profile, freqStart: 880, freqEnd: 880 });
+      playTone(ctx, now + 0.12, { ...profile, freqStart: 1100, freqEnd: 1100, volume: 0.15 });
       return;
     }
 

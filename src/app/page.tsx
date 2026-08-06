@@ -15,8 +15,13 @@ import {
 import {
   Mic, MicOff, Send, Loader2, Zap, ShieldAlert, Wifi, WifiOff,
   Check, X, MessageSquare, Sparkles, Terminal, Activity, Circle,
-  Volume2, Camera, Upload, Keyboard, Ear, Save, Trash2, Radio,
+  Volume2, Camera, Upload, Keyboard, Ear, Save, Trash2, Radio, Monitor,
+  Download, Lock, LockOpen, ShieldCheck,
 } from 'lucide-react';
+import {
+  requireVerification, verifyWithBiometric, verifyWithVoice,
+  getSecurityLevel, setSecurityLevel, type SecurityLevel,
+} from '@/lib/security';
 import { WakeWordDetector } from '@/lib/wake-word';
 import { playSoundEffect, createAudioAnalyser, getAudioLevel, startBargeInDetection, stopSpeaking, cleanupAudioSystem } from '@/lib/audio-system';
 import { saveConversation, getMemoryContext } from '@/lib/memory';
@@ -71,39 +76,79 @@ function AudioVisualizer({ analyser, active }: { analyser: AnalyserNode | null; 
     if (!ctx) return;
     const bufLen = analyser.frequencyBinCount;
     const data = new Uint8Array(bufLen);
-    const barCount = 32;
+    const barCount = 48;
+    const centerY = canvas!.height / 2;
 
     const draw = () => {
       rafRef.current = requestAnimationFrame(draw);
       analyser.getByteFrequencyData(data);
       ctx!.clearRect(0, 0, canvas!.width, canvas!.height);
+
+      // Center line at 10% white opacity
+      ctx!.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+      ctx!.lineWidth = 0.5;
+      ctx!.beginPath();
+      ctx!.moveTo(0, centerY);
+      ctx!.lineTo(canvas!.width, centerY);
+      ctx!.stroke();
+
       const step = Math.floor(bufLen / barCount);
       const barW = canvas!.width / barCount - 1;
       for (let i = 0; i < barCount; i++) {
         const val = data[i * step] / 255;
-        const h = val * canvas!.height * 0.9;
+        const h = val * centerY * 0.9;
         const x = i * (barW + 1);
-        const gradient = ctx!.createLinearGradient(0, canvas!.height, 0, canvas!.height - h);
+        const color = `rgba(0, 232, 255, ${0.3 + val * 0.7})`;
+        const gradient = ctx!.createLinearGradient(0, centerY, 0, centerY - h);
         gradient.addColorStop(0, 'rgba(0, 232, 255, 0.1)');
-        gradient.addColorStop(1, `rgba(0, 232, 255, ${0.3 + val * 0.7})`);
+        gradient.addColorStop(1, color);
+
+        // Glow effect
+        ctx!.shadowBlur = 6;
+        ctx!.shadowColor = color;
+
         ctx!.fillStyle = gradient;
-        ctx!.fillRect(x, canvas!.height - h, barW, h);
+        ctx!.fillRect(x, centerY - h, barW, h);
+
+        // Reflection below center line at 30% opacity
+        ctx!.shadowBlur = 0;
+        ctx!.globalAlpha = 0.3;
+        const reflGradient = ctx!.createLinearGradient(0, centerY, 0, centerY + h);
+        reflGradient.addColorStop(0, 'rgba(0, 232, 255, 0.1)');
+        reflGradient.addColorStop(1, 'rgba(0, 232, 255, 0)');
+        ctx!.fillStyle = reflGradient;
+        ctx!.fillRect(x, centerY, barW, h);
+        ctx!.globalAlpha = 1.0;
       }
     };
     draw();
     return () => cancelAnimationFrame(rafRef.current);
   }, [analyser, active]);
 
-  return <canvas ref={canvasRef} width={256} height={40} className={cn('w-full h-8 opacity-0 transition-opacity duration-300', active && 'opacity-100')} />;
+  return <canvas ref={canvasRef} width={384} height={64} className={cn('w-full h-10 opacity-0 transition-opacity duration-300', active && 'opacity-100')} />;
 }
 
 /* ═══════════════════════════════════════════════════════════════
    STATUS BAR
    ═══════════════════════════════════════════════════════════════ */
 
-function StatusBar({ wakeWordActive, onToggleWakeWord }: { wakeWordActive: boolean; onToggleWakeWord: () => void }) {
+function StatusBar({ wakeWordActive, onToggleWakeWord, installPrompt, onInstallClick, securityLevel, onCycleSecurity }: {
+  wakeWordActive: boolean; onToggleWakeWord: () => void;
+  installPrompt: Event | null; onInstallClick: () => void;
+  securityLevel: SecurityLevel; onCycleSecurity: () => void;
+}) {
   const { agentState, connected } = useJarvisStore();
   const cfg = STATE_CONFIG[agentState];
+
+  const securityIcon = securityLevel === 'none' ? <LockOpen className="size-3" />
+    : securityLevel === 'biometric' ? <Lock className="size-3" />
+    : securityLevel === 'voice' ? <Mic className="size-3" />
+    : <ShieldCheck className="size-3" />;
+
+  const securityLabel = securityLevel === 'none' ? 'No security'
+    : securityLevel === 'biometric' ? 'Biometric lock'
+    : securityLevel === 'voice' ? 'Voice lock'
+    : 'Full security (voice + biometric)';
 
   return (
     <header className="relative z-20 flex h-12 items-center justify-between border-b border-white/[0.06] px-4 md:px-6 bg-[#060a14]/80 backdrop-blur-xl">
@@ -119,6 +164,36 @@ function StatusBar({ wakeWordActive, onToggleWakeWord }: { wakeWordActive: boole
       </div>
 
       <div className="flex items-center gap-2">
+        {/* Security toggle */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost" size="icon" onClick={onCycleSecurity}
+              className={cn('h-7 w-7 rounded-lg',
+                securityLevel === 'none' ? 'text-white/30' : 'text-amber-400 bg-amber-500/10',
+              )}
+            >
+              {securityIcon}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="text-xs">{securityLabel} — click to change</TooltipContent>
+        </Tooltip>
+
+        {/* PWA install button */}
+        {installPrompt && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost" size="icon" onClick={onInstallClick}
+                className="h-7 w-7 rounded-lg text-cyan-400 bg-cyan-500/10"
+              >
+                <Download className="size-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">Install ZARA as an app</TooltipContent>
+          </Tooltip>
+        )}
+
         {/* Wake word toggle */}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -316,7 +391,32 @@ function ToolExecutionCard({ exec }: { exec: ToolExecution }) {
 
 function PendingActionCard({ action }: { action: PendingAction }) {
   const { setPendingAction } = useJarvisStore();
-  const handleConfirm = useCallback(() => { setPendingAction(null); sendToJarvis('approved'); }, [setPendingAction]);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState('');
+  const handleConfirm = useCallback(async () => {
+    // Security verification check
+    if (requireVerification()) {
+      setVerifying(true);
+      setVerifyError('');
+      const level = getSecurityLevel();
+      let verified = false;
+
+      if (level === 'biometric' || level === 'both') {
+        verified = await verifyWithBiometric();
+      }
+      if (!verified && (level === 'voice' || level === 'both')) {
+        verified = await verifyWithVoice();
+      }
+
+      setVerifying(false);
+      if (!verified) {
+        setVerifyError('Verification failed. Please try again.');
+        playSoundEffect('error');
+        return;
+      }
+    }
+    setPendingAction(null); sendToJarvis('approved');
+  }, [setPendingAction]);
   const handleDeny = useCallback(() => { setPendingAction(null); sendToJarvis('cancelled'); }, [setPendingAction]);
 
   return (
@@ -337,13 +437,20 @@ function PendingActionCard({ action }: { action: PendingAction }) {
             <pre className="rounded-lg bg-black/30 px-3 py-2 text-xs font-mono text-white/50 overflow-x-auto">{JSON.stringify(action.args, null, 2)}</pre>
           )}
         </div>
+        {verifyError && (
+          <div className="flex items-center gap-2 mb-3 rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2">
+            <X className="size-3 text-red-400 shrink-0" />
+            <span className="text-xs text-red-300/80">{verifyError}</span>
+          </div>
+        )}
         <Separator className="bg-orange-500/10 mb-3" />
         <div className="flex items-center gap-2 justify-end">
           <Button variant="ghost" size="sm" onClick={handleDeny} className="h-8 gap-1.5 text-white/50 hover:text-rose-300 hover:bg-rose-500/10">
             <X className="size-3.5" /> Deny
           </Button>
-          <Button size="sm" onClick={handleConfirm} className="h-8 gap-1.5 bg-emerald-600/80 text-white border-0 hover:bg-emerald-600">
-            <Check className="size-3.5" /> Confirm
+          <Button size="sm" onClick={handleConfirm} disabled={verifying} className="h-8 gap-1.5 bg-emerald-600/80 text-white border-0 hover:bg-emerald-600">
+            {verifying ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+            {verifying ? 'Verifying...' : 'Confirm'}
           </Button>
         </div>
       </div>
@@ -406,6 +513,13 @@ function sendToJarvis(text: string, image?: string) {
     .filter(m => m.role === 'user' || m.role === 'assistant')
     .slice(-10)
     .map(m => ({ role: m.role, content: m.text }));
+
+  // Inject memory context as system-like messages at the front
+  const memCtx = getMemoryContext();
+  if (memCtx) {
+    apiMessages.unshift({ role: 'user', content: `[Memory context: ${memCtx}]` });
+    apiMessages.unshift({ role: 'assistant', content: 'Understood, I will use this context.' });
+  }
 
   const body: Record<string, any> = { messages: apiMessages };
   if (image) body.image = image;
@@ -507,6 +621,27 @@ function ChatInput() {
     reader.onload = () => { const base64 = reader.result as string; sendToJarvis('What do you see in this image?', base64); };
     reader.readAsDataURL(file);
   }
+
+  const handleScreenCapture = useCallback(async () => {
+    if (isBusy) return;
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.muted = true;
+      await video.play();
+      await new Promise(r => setTimeout(r, 200));
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d')!.drawImage(video, 0, 0);
+      stream.getTracks().forEach(t => t.stop());
+      const base64 = canvas.toDataURL('image/png');
+      sendToJarvis('What do you see in this screenshot?', base64);
+    } catch {
+      // User cancelled or browser denied
+    }
+  }, [isBusy]);
 
   // Cleanup recognition
   useEffect(() => {
@@ -613,6 +748,16 @@ function ChatInput() {
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" className="text-xs">Send image (or paste)</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="outline" size="icon" onClick={handleScreenCapture} disabled={isBusy}
+              className="h-10 w-10 shrink-0 rounded-xl border-white/10 bg-white/5 text-white/60 transition-all hover:text-white hover:bg-white/10">
+              <Monitor className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-xs">Screen capture</TooltipContent>
         </Tooltip>
 
         <div className="relative flex-1">
@@ -757,9 +902,29 @@ function speakTextWithMouthSync(text: string) {
 
 export default function Home() {
   const [wakeWordActive, setWakeWordActive] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
+  const [securityLevel, setSecurityLevelState] = useState<SecurityLevel>('none');
   const wakeWordRef = useRef<WakeWordDetector | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const bargeInRef = useRef<(() => void) | null>(null);
+  const backchannelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // PWA install handler
+  const handleInstallClick = useCallback(() => {
+    if (installPrompt) {
+      (installPrompt as any).prompt();
+      setInstallPrompt(null);
+    }
+  }, [installPrompt]);
+
+  // Security level cycle: none -> biometric -> voice -> both -> none
+  const cycleSecurity = useCallback(() => {
+    const levels: SecurityLevel[] = ['none', 'biometric', 'voice', 'both'];
+    const current = getSecurityLevel();
+    const next = levels[(levels.indexOf(current) + 1) % levels.length];
+    setSecurityLevel(next);
+    setSecurityLevelState(next);
+  }, []);
 
   // Initialize connection + audio + PWA
   useEffect(() => {
@@ -774,6 +939,10 @@ export default function Home() {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
+
+    // PWA install prompt
+    const handleBeforeInstall = (e: Event) => { e.preventDefault(); setInstallPrompt(e); };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
 
     // Load voices (needed for TTS selection)
     speechSynthesis.getVoices();
@@ -793,6 +962,7 @@ export default function Home() {
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
       window.speechSynthesis.cancel();
       wakeWordRef.current?.destroy();
       bargeInRef.current?.();
@@ -811,6 +981,65 @@ export default function Home() {
     }
     return () => { bargeInRef.current?.(); bargeInRef.current = null; };
   });
+
+  // Backchanneling: brief affirmations while user is speaking
+  useEffect(() => {
+    const BACKCHANNEL_PHRASES = ['I see', 'right', 'yes', 'go on', 'mm-hmm', 'understood', 'continue'];
+    let active = false;
+
+    function scheduleBackchannel() {
+      if (backchannelTimerRef.current) clearTimeout(backchannelTimerRef.current);
+      const delay = 4000 + Math.random() * 3000; // 4–7 seconds
+      backchannelTimerRef.current = setTimeout(() => {
+        if (!active) return;
+        const state = useJarvisStore.getState().agentState;
+        if (state !== 'listening') { active = false; return; }
+
+        const phrase = BACKCHANNEL_PHRASES[Math.floor(Math.random() * BACKCHANNEL_PHRASES.length)];
+
+        // Play subtle click sound before backchannel
+        playSoundEffect('click');
+
+        // Speak backchannel at low volume, quick voice — without changing agentState
+        const utt = new SpeechSynthesisUtterance(phrase);
+        utt.volume = 0.3;
+        utt.rate = 1.3;
+        utt.pitch = 1.1;
+        const voices = speechSynthesis.getVoices();
+        const preferred = voices.find(v => v.lang.startsWith('en') && v.name.includes('Google')) ||
+                          voices.find(v => v.lang.startsWith('en') && !v.localService) ||
+                          voices.find(v => v.lang.startsWith('en'));
+        if (preferred) utt.voice = preferred;
+        speechSynthesis.speak(utt);
+
+        // Schedule next backchannel
+        if (active) scheduleBackchannel();
+      }, delay);
+    }
+
+    function stopBackchannel() {
+      active = false;
+      if (backchannelTimerRef.current) {
+        clearTimeout(backchannelTimerRef.current);
+        backchannelTimerRef.current = null;
+      }
+    }
+
+    // Subscribe to agentState changes
+    const unsub = useJarvisStore.subscribe((state, prev) => {
+      if (state.agentState === 'listening' && prev.agentState !== 'listening') {
+        active = true;
+        scheduleBackchannel();
+      } else if (state.agentState !== 'listening' && prev.agentState === 'listening') {
+        stopBackchannel();
+      }
+    });
+
+    return () => {
+      stopBackchannel();
+      unsub();
+    };
+  }, []);
 
   // Wake word toggle
   const toggleWakeWord = useCallback(() => {
@@ -867,7 +1096,7 @@ export default function Home() {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#050810] text-white">
       <TooltipProvider delayDuration={300}>
-        <StatusBar wakeWordActive={wakeWordActive} onToggleWakeWord={toggleWakeWord} />
+        <StatusBar wakeWordActive={wakeWordActive} onToggleWakeWord={toggleWakeWord} installPrompt={installPrompt} onInstallClick={handleInstallClick} securityLevel={securityLevel} onCycleSecurity={cycleSecurity} />
         <main className="flex flex-1 flex-col overflow-hidden md:flex-row">
           <FacePanel analyser={analyserRef.current} />
           <div className="hidden md:block w-px bg-gradient-to-b from-transparent via-cyan-500/10 to-transparent" />

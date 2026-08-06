@@ -253,7 +253,7 @@ function FacePanel({ analyser }: { analyser: AnalyserNode | null }) {
   const { agentState, transcript } = useJarvisStore();
 
   return (
-    <div className="relative h-[30vh] min-h-[220px] w-full md:h-full md:w-[42%] lg:w-[40%] shrink-0">
+    <div className="relative h-[24vh] min-h-[180px] w-full md:h-full md:w-[42%] lg:w-[40%] shrink-0">
       {/* Ambient radial gradient background */}
       <div className="absolute inset-0 z-0" style={{
         background: 'radial-gradient(ellipse at 50% 40%, rgba(0,40,80,0.3) 0%, rgba(5,8,16,0) 70%)',
@@ -747,10 +747,11 @@ function ChatInput() {
               <Camera className="size-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="top" className="text-xs">Send image (or paste)</TooltipContent>
+          <TooltipContent side="top" className="text-xs">Image</TooltipContent>
         </Tooltip>
 
-        <Tooltip>
+        {/* Screen capture — desktop only */}
+        <Tooltip className="hidden md:block">
           <TooltipTrigger asChild>
             <Button variant="outline" size="icon" onClick={handleScreenCapture} disabled={isBusy}
               className="h-10 w-10 shrink-0 rounded-xl border-white/10 bg-white/5 text-white/60 transition-all hover:text-white hover:bg-white/10">
@@ -790,7 +791,8 @@ function ChatInput() {
         </Tooltip>
       </div>
 
-      <p className="mt-2 text-center text-[10px] text-white/15" style={{ fontFamily: 'var(--font-orbitron), monospace' }}>
+      {/* Keyboard hints — desktop only */}
+      <p className="mt-2 hidden text-center text-[10px] text-white/15 md:block" style={{ fontFamily: 'var(--font-orbitron), monospace' }}>
         <kbd className="rounded border border-white/10 bg-white/5 px-1 py-0.5 text-[9px]">Enter</kbd> send
         {' · '}<kbd className="rounded border border-white/10 bg-white/5 px-1 py-0.5 text-[9px]">Space</kbd> voice
         {' · '}<kbd className="rounded border border-white/10 bg-white/5 px-1 py-0.5 text-[9px]">Ctrl+V</kbd> paste image
@@ -847,7 +849,9 @@ function ChatPanel() {
 
 function speakTextWithMouthSync(text: string) {
   const synth = window.speechSynthesis;
+  if (!synth) return;
   synth.cancel();
+
   const store = useJarvisStore.getState();
   store.setAgentState('speaking');
 
@@ -855,44 +859,59 @@ function speakTextWithMouthSync(text: string) {
   const sentences = text.match(/[^.!?\n]+[.!?\n]+/g) || [text];
   let buffer = '';
   for (const s of sentences) {
-    if ((buffer + s).length > 150 && buffer.trim()) { chunks.push(buffer.trim()); buffer = s; } else { buffer += s; }
+    if ((buffer + s).length > 180 && buffer.trim()) { chunks.push(buffer.trim()); buffer = s; } else { buffer += s; }
   }
   if (buffer.trim()) chunks.push(buffer.trim());
 
+  let finished = false;
   let mouthDecay: ReturnType<typeof setTimeout> | null = null;
-  let keepalive: ReturnType<typeof setInterval> | null = null;
-
-  keepalive = setInterval(() => {
-    if (synth.speaking) { synth.pause(); setTimeout(() => synth.resume(), 50); }
-  }, 10000);
 
   const cleanup = () => {
-    if (keepalive) clearInterval(keepalive);
+    if (finished) return;
+    finished = true;
     if (mouthDecay) clearTimeout(mouthDecay);
+    try { synth.cancel(); } catch { /* */ }
     useJarvisStore.getState().setMouthOpen(0);
     useJarvisStore.getState().setAgentState('idle');
   };
 
   let idx = 0;
   const speakNext = () => {
-    if (idx >= chunks.length) { cleanup(); return; }
+    if (finished || idx >= chunks.length) { cleanup(); return; }
     const utt = new SpeechSynthesisUtterance(chunks[idx]);
-    // Select a good English voice
+
+    // Pick best available voice
     const voices = synth.getVoices();
     const preferred = voices.find(v => v.lang.startsWith('en') && v.name.includes('Google')) ||
                       voices.find(v => v.lang.startsWith('en') && !v.localService) ||
                       voices.find(v => v.lang.startsWith('en'));
     if (preferred) utt.voice = preferred;
+    utt.rate = 1.0;
+    utt.pitch = 0.95;
 
     utt.onboundary = () => {
       useJarvisStore.getState().setMouthOpen(0.5);
       if (mouthDecay) clearTimeout(mouthDecay);
-      mouthDecay = setTimeout(() => { useJarvisStore.getState().setMouthOpen(0); }, 200);
+      mouthDecay = setTimeout(() => { useJarvisStore.getState().setMouthOpen(0); }, 180);
     };
     utt.onend = () => { idx++; speakNext(); };
-    utt.onerror = () => { cleanup(); };
+    utt.onerror = (e) => { console.warn('[TTS error]', e); cleanup(); };
     synth.speak(utt);
   };
+
+  // Mobile Chrome bug: speechSynthesis pauses after ~15s.
+  // Workaround: briefly pause+resume every 10s to keep it alive.
+  const keepalive = setInterval(() => {
+    if (finished) { clearInterval(keepalive); return; }
+    if (synth.speaking && !synth.paused) {
+      synth.pause();
+      setTimeout(() => { try { synth.resume(); } catch { /* */ } }, 25);
+    }
+  }, 10000);
+
+  // Safety timeout: force-stop after 60s total
+  const safetyTimeout = setTimeout(() => { cleanup(); clearInterval(keepalive); }, 60000);
+
   speakNext();
 }
 
@@ -983,7 +1002,11 @@ export default function Home() {
   });
 
   // Backchanneling: brief affirmations while user is speaking
+  // Disabled on mobile — causes TTS conflicts
   useEffect(() => {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile) return;
+
     const BACKCHANNEL_PHRASES = ['I see', 'right', 'yes', 'go on', 'mm-hmm', 'understood', 'continue'];
     let active = false;
 

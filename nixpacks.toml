@@ -1,8 +1,16 @@
 [phases.setup]
-nixPkgs = ["...", "nodejs_22"]
+nixPkgs = ["nodejs_22"]
 
 [phases.install]
-cmds = ["npm install --legacy-peer-deps"]
+cmds = ["npm ci --legacy-peer-deps"]
+
+[phases.build]
+cmds = [
+  "npx prisma generate",
+  "npm run build",
+  "cp -r .next/static .next/standalone/.next/",
+  "cp -r public .next/standalone/"
+]
 
 [start]
 cmd = "node .next/standalone/server.js"

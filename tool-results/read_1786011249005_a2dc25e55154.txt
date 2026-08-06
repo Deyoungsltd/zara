@@ -1,0 +1,989 @@
+     1→'use client';
+     2→
+     3→import { useRef, useState, useEffect, useCallback } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import { useJarvisStore } from '@/lib/jarvis-store';
+     6→import type { ChatMessage, AgentState, PendingAction, ToolExecution } from '@/lib/jarvis-store';
+     7→import JarvisFace from '@/components/jarvis-face';
+     8→import { Button } from '@/components/ui/button';
+     9→import { Badge } from '@/components/ui/badge';
+    10→import { ScrollArea } from '@/components/ui/scroll-area';
+    11→import { Separator } from '@/components/ui/separator';
+    12→import {
+    13→  Tooltip,
+    14→  TooltipContent,
+    15→  TooltipProvider,
+    16→  TooltipTrigger,
+    17→} from '@/components/ui/tooltip';
+    18→import {
+    19→  Mic,
+    20→  MicOff,
+    21→  Send,
+    22→  Loader2,
+    23→  Zap,
+    24→  ShieldAlert,
+    25→  Wifi,
+    26→  WifiOff,
+    27→  Check,
+    28→  X,
+    29→  MessageSquare,
+    30→  Sparkles,
+    31→  Terminal,
+    32→  Activity,
+    33→  Circle,
+    34→  Volume2,
+    35→  Camera,
+    36→} from 'lucide-react';
+    37→
+    38→/* ═══════════════════════════════════════════════════════════════
+    39→   STATE CONFIGURATION
+    40→   ═══════════════════════════════════════════════════════════════ */
+    41→
+    42→const STATE_CONFIG: Record<
+    43→  AgentState,
+    44→  { label: string; dotColor: string; icon: React.ReactNode; animate: boolean }
+    45→> = {
+    46→  idle: {
+    47→    label: 'Online',
+    48→    dotColor: 'bg-cyan-400',
+    49→    icon: <Circle className="size-3" />,
+    50→    animate: false,
+    51→  },
+    52→  listening: {
+    53→    label: 'Listening',
+    54→    dotColor: 'bg-rose-400',
+    55→    icon: <Mic className="size-3" />,
+    56→    animate: true,
+    57→  },
+    58→  thinking: {
+    59→    label: 'Processing',
+    60→    dotColor: 'bg-amber-400',
+    61→    icon: <Activity className="size-3" />,
+    62→    animate: true,
+    63→  },
+    64→  speaking: {
+    65→    label: 'Speaking',
+    66→    dotColor: 'bg-emerald-400',
+    67→    icon: <Sparkles className="size-3" />,
+    68→    animate: true,
+    69→  },
+    70→  awaiting_confirmation: {
+    71→    label: 'Awaiting Confirmation',
+    72→    dotColor: 'bg-orange-400',
+    73→    icon: <ShieldAlert className="size-3" />,
+    74→    animate: false,
+    75→  },
+    76→  executing: {
+    77→    label: 'Executing',
+    78→    dotColor: 'bg-violet-400',
+    79→    icon: <Terminal className="size-3" />,
+    80→    animate: true,
+    81→  },
+    82→};
+    83→
+    84→const SUGGESTIONS = [
+    85→  'What capabilities do you have?',
+    86→  'Show me today\'s schedule',
+    87→  'Analyze the latest data',
+    88→  'Run a system diagnostic',
+    89→  'What\'s the weather outside?',
+    90→  'Play some ambient music',
+    91→];
+    92→
+    93→/* ═══════════════════════════════════════════════════════════════
+    94→   HELPERS
+    95→   ═══════════════════════════════════════════════════════════════ */
+    96→
+    97→function formatTime(ts: number): string {
+    98→  return new Date(ts).toLocaleTimeString([], {
+    99→    hour: '2-digit',
+   100→    minute: '2-digit',
+   101→  });
+   102→}
+   103→
+   104→function cn(...classes: (string | boolean | undefined | null)[]) {
+   105→  return classes.filter(Boolean).join(' ');
+   106→}
+   107→
+   108→
+   109→/* ═══════════════════════════════════════════════════════════════
+   110→   STATUS BAR
+   111→   ═══════════════════════════════════════════════════════════════ */
+   112→
+   113→function StatusBar() {
+   114→  const { agentState, connected } = useJarvisStore();
+   115→  const cfg = STATE_CONFIG[agentState];
+   116→
+   117→  return (
+   118→    <header className="relative z-20 flex h-14 items-center justify-between border-b border-white/[0.06] px-4 md:px-6">
+   119→      {/* Branding */}
+   120→      <div className="flex items-center gap-3">
+   121→        <div className="flex items-center gap-2">
+   122→          <div className="flex size-8 items-center justify-center rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+   123→            <Sparkles className="size-4 text-cyan-400" />
+   124→          </div>
+   125→          <h1 className="text-sm font-semibold tracking-[0.25em] text-white/90 uppercase">
+   126→            J.A.R.V.I.S.
+   127→          </h1>
+   128→        </div>
+   129→      </div>
+   130→
+   131→      {/* Status indicators */}
+   132→      <div className="flex items-center gap-3">
+   133→        {/* Agent state badge */}
+   134→        <AnimatePresence mode="wait">
+   135→          <motion.div
+   136→            key={agentState}
+   137→            initial={{ opacity: 0, y: -6, scale: 0.95 }}
+   138→            animate={{ opacity: 1, y: 0, scale: 1 }}
+   139→            exit={{ opacity: 0, y: 6, scale: 0.95 }}
+   140→            transition={{ duration: 0.2 }}
+   141→          >
+   142→            <Badge
+   143→              variant="outline"
+   144→              className={cn(
+   145→                'gap-1.5 border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium text-white/80',
+   146→                agentState === 'listening' && 'border-rose-500/30 bg-rose-500/10 text-rose-300',
+   147→                agentState === 'thinking' && 'border-amber-500/30 bg-amber-500/10 text-amber-300',
+   148→                agentState === 'speaking' && 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
+   149→                agentState === 'executing' && 'border-violet-500/30 bg-violet-500/10 text-violet-300',
+   150→                agentState === 'awaiting_confirmation' && 'border-orange-500/30 bg-orange-500/10 text-orange-300',
+   151→              )}
+   152→            >
+   153→              <span className={cn('inline-block size-1.5 rounded-full', cfg.dotColor, cfg.animate && 'animate-pulse')} />
+   154→              {cfg.icon}
+   155→              {cfg.label}
+   156→            </Badge>
+   157→          </motion.div>
+   158→        </AnimatePresence>
+   159→
+   160→        {/* Connection status */}
+   161→        <Tooltip>
+   162→          <TooltipTrigger asChild>
+   163→            <div
+   164→              className={cn(
+   165→                'flex size-8 items-center justify-center rounded-full border transition-colors',
+   166→                connected
+   167→                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+   168→                  : 'border-white/10 bg-white/5 text-white/30',
+   169→              )}
+   170→            >
+   171→              {connected ? <Wifi className="size-3.5" /> : <WifiOff className="size-3.5" />}
+   172→            </div>
+   173→          </TooltipTrigger>
+   174→          <TooltipContent side="bottom" className="text-xs">
+   175→            {connected ? 'Connected' : 'Disconnected'}
+   176→          </TooltipContent>
+   177→        </Tooltip>
+   178→      </div>
+   179→    </header>
+   180→  );
+   181→}
+   182→
+   183→/* ═══════════════════════════════════════════════════════════════
+   184→   FACE PANEL
+   185→   ═══════════════════════════════════════════════════════════════ */
+   186→
+   187→function FacePanel() {
+   188→  const { agentState, transcript } = useJarvisStore();
+   189→
+   190→  return (
+   191→    <div className="relative h-[30vh] min-h-[220px] w-full md:h-full md:w-[42%] lg:w-[40%] shrink-0">
+   192→      {/* Ambient glow behind the face */}
+   193→      <div className="absolute inset-0 z-0 flex items-center justify-center">
+   194→        <div
+   195→          className={cn(
+   196→            'h-[60%] w-[60%] rounded-full blur-3xl transition-colors duration-700',
+   197→            agentState === 'listening' && 'bg-rose-500/[0.07]',
+   198→            agentState === 'thinking' && 'bg-amber-500/[0.08]',
+   199→            agentState === 'speaking' && 'bg-emerald-500/[0.07]',
+   200→            (agentState === 'idle' || agentState === 'executing' || agentState === 'awaiting_confirmation') &&
+   201→              'bg-cyan-500/[0.06]',
+   202→          )}
+   203→        />
+   204→      </div>
+   205→
+   206→      {/* Scanline overlay for cinematic feel */}
+   207→      <div
+   208→        className="pointer-events-none absolute inset-0 z-[2] opacity-[0.03]"
+   209→        style={{
+   210→          backgroundImage:
+   211→            'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.08) 2px, rgba(255,255,255,0.08) 4px)',
+   212→        }}
+   213→      />
+   214→
+   215→      {/* 3D Face */}
+   216→      <div className="relative z-[1] h-full w-full">
+   217→        <JarvisFace />
+   218→      </div>
+   219→
+   220→      {/* Transcript overlay — shown during listening */}
+   221→      <AnimatePresence>
+   222→        {agentState === 'listening' && transcript && (
+   223→          <motion.div
+   224→            initial={{ opacity: 0, y: 8 }}
+   225→            animate={{ opacity: 1, y: 0 }}
+   226→            exit={{ opacity: 0, y: 8 }}
+   227→            className="absolute bottom-6 left-1/2 z-10 w-[85%] max-w-sm -translate-x-1/2"
+   228→          >
+   229→            <div className="rounded-xl border border-rose-500/20 bg-rose-950/40 px-4 py-3 text-center backdrop-blur-md">
+   230→              <p className="text-sm text-rose-200/90 leading-relaxed">
+   231→                &ldquo;{transcript}&rdquo;
+   232→              </p>
+   233→            </div>
+   234→          </motion.div>
+   235→        )}
+   236→      </AnimatePresence>
+   237→
+   238→      {/* State text overlay — shown during thinking/speaking */}
+   239→      <AnimatePresence>
+   240→        {agentState === 'thinking' && (
+   241→          <motion.div
+   242→            initial={{ opacity: 0, y: 8 }}
+   243→            animate={{ opacity: 1, y: 0 }}
+   244→            exit={{ opacity: 0, y: 8 }}
+   245→            className="absolute bottom-8 left-1/2 z-10 -translate-x-1/2"
+   246→          >
+   247→            <div className="flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-950/40 px-4 py-2 backdrop-blur-md">
+   248→              <Loader2 className="size-3.5 animate-spin text-amber-400" />
+   249→              <span className="text-xs font-medium text-amber-300/90">Processing your request...</span>
+   250→            </div>
+   251→          </motion.div>
+   252→        )}
+   253→        {agentState === 'speaking' && (
+   254→          <motion.div
+   255→            initial={{ opacity: 0, y: 8 }}
+   256→            animate={{ opacity: 1, y: 0 }}
+   257→            exit={{ opacity: 0, y: 8 }}
+   258→            className="absolute bottom-8 left-1/2 z-10 -translate-x-1/2"
+   259→          >
+   260→            <div className="flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-950/40 px-4 py-2 backdrop-blur-md">
+   261→              <Volume2 className="size-3.5 text-emerald-400" />
+   262→              <span className="text-xs font-medium text-emerald-300/90">Speaking...</span>
+   263→            </div>
+   264→          </motion.div>
+   265→        )}
+   266→        {agentState === 'executing' && (
+   267→          <motion.div
+   268→            initial={{ opacity: 0, y: 8 }}
+   269→            animate={{ opacity: 1, y: 0 }}
+   270→            exit={{ opacity: 0, y: 8 }}
+   271→            className="absolute bottom-8 left-1/2 z-10 -translate-x-1/2"
+   272→          >
+   273→            <div className="flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-950/40 px-4 py-2 backdrop-blur-md">
+   274→              <Terminal className="size-3.5 text-violet-400" />
+   275→              <span className="text-xs font-medium text-violet-300/90">Executing command...</span>
+   276→            </div>
+   277→          </motion.div>
+   278→        )}
+   279→      </AnimatePresence>
+   280→    </div>
+   281→  );
+   282→}
+   283→
+   284→/* ═══════════════════════════════════════════════════════════════
+   285→   MESSAGE BUBBLE
+   286→   ═══════════════════════════════════════════════════════════════ */
+   287→
+   288→function MessageBubble({ message }: { message: ChatMessage }) {
+   289→  const isUser = message.role === 'user';
+   290→  const isSystem = message.role === 'system';
+   291→
+   292→  if (isSystem) {
+   293→    return (
+   294→      <motion.div
+   295→        initial={{ opacity: 0, scale: 0.95 }}
+   296→        animate={{ opacity: 1, scale: 1 }}
+   297→        className="flex justify-center px-4"
+   298→      >
+   299→        <div className="rounded-lg border border-amber-500/15 bg-amber-500/[0.06] px-3 py-1.5">
+   300→          <p className="text-[11px] font-medium text-amber-400/70">{message.text}</p>
+   301→        </div>
+   302→      </motion.div>
+   303→    );
+   304→  }
+   305→
+   306→  return (
+   307→    <motion.div
+   308→      initial={{ opacity: 0, y: 12, scale: 0.97 }}
+   309→      animate={{ opacity: 1, y: 0, scale: 1 }}
+   310→      transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+   311→      className={cn('flex gap-2.5 px-4', isUser ? 'flex-row-reverse' : 'flex-row')}
+   312→    >
+   313→      {/* Avatar */}
+   314→      <div
+   315→        className={cn(
+   316→          'mt-1 flex size-7 shrink-0 items-center justify-center rounded-full border',
+   317→          isUser
+   318→            ? 'border-cyan-500/25 bg-cyan-500/10'
+   319→            : 'border-white/10 bg-white/5',
+   320→        )}
+   321→      >
+   322→        {isUser ? (
+   323→          <MessageSquare className="size-3.5 text-cyan-400" />
+   324→        ) : (
+   325→          <Sparkles className="size-3.5 text-cyan-400" />
+   326→        )}
+   327→      </div>
+   328→
+   329→      {/* Bubble */}
+   330→      <div className={cn('max-w-[80%] md:max-w-[75%]', isUser && 'flex flex-col items-end')}>
+   331→        <div
+   332→          className={cn(
+   333→            'rounded-2xl border px-4 py-2.5 text-sm leading-relaxed',
+   334→            isUser
+   335→              ? 'rounded-br-md border-cyan-500/15 bg-cyan-500/[0.08] text-cyan-50'
+   336→              : 'rounded-bl-md border-white/[0.08] bg-white/[0.04] text-white/85',
+   337→          )}
+   338→        >
+   339→          {message.image && (
+   340→            <img
+   341→              src={message.image}
+   342→              alt="User uploaded"
+   343→              className="mb-2 max-h-48 rounded-lg object-contain"
+   344→            />
+   345→          )}
+   346→          {message.text}
+   347→        </div>
+   348→        <span className="mt-1 px-1 text-[10px] font-mono text-white/20">
+   349→          {formatTime(message.timestamp)}
+   350→        </span>
+   351→      </div>
+   352→    </motion.div>
+   353→  );
+   354→}
+   355→
+   356→/* ═══════════════════════════════════════════════════════════════
+   357→   TOOL EXECUTION CARD
+   358→   ═══════════════════════════════════════════════════════════════ */
+   359→
+   360→function ToolExecutionCard({ exec }: { exec: ToolExecution }) {
+   361→  return (
+   362→    <motion.div
+   363→      initial={{ opacity: 0, y: 10 }}
+   364→      animate={{ opacity: 1, y: 0 }}
+   365→      className="mx-4"
+   366→    >
+   367→      <div className="rounded-xl border border-emerald-500/15 bg-emerald-500/[0.05] p-3.5">
+   368→        <div className="flex items-center gap-2 mb-2">
+   369→          <Zap className="size-3.5 text-emerald-400" />
+   370→          <span className="text-xs font-semibold text-emerald-400">Tool Executed</span>
+   371→          <Badge variant="outline" className="ml-auto border-white/10 bg-white/5 text-[10px] text-white/50">
+   372→            {exec.tier}
+   373→          </Badge>
+   374→        </div>
+   375→        <div className="space-y-1.5">
+   376→          <div className="flex items-center gap-2">
+   377→            <Terminal className="size-3 text-white/30" />
+   378→            <span className="text-xs font-mono text-emerald-300/80">{exec.tool}</span>
+   379→          </div>
+   380→          <pre className="rounded-lg bg-black/30 px-3 py-2 text-xs font-mono text-white/60 overflow-x-auto max-h-32 overflow-y-auto">
+   381→            {exec.result}
+   382→          </pre>
+   383→        </div>
+   384→      </div>
+   385→    </motion.div>
+   386→  );
+   387→}
+   388→
+   389→/* ═══════════════════════════════════════════════════════════════
+   390→   PENDING ACTION CARD
+   391→   ═══════════════════════════════════════════════════════════════ */
+   392→
+   393→function PendingActionCard({ action }: { action: PendingAction }) {
+   394→  const { setPendingAction } = useJarvisStore();
+   395→
+   396→  const handleConfirm = useCallback(() => {
+   397→    setPendingAction(null);
+   398→    sendToJarvis('approved');
+   399→  }, [setPendingAction]);
+   400→
+   401→  const handleDeny = useCallback(() => {
+   402→    setPendingAction(null);
+   403→    sendToJarvis('cancelled');
+   404→  }, [setPendingAction]);
+   405→
+   406→  return (
+   407→    <motion.div
+   408→      initial={{ opacity: 0, y: 10, scale: 0.98 }}
+   409→      animate={{ opacity: 1, y: 0, scale: 1 }}
+   410→      className="mx-4"
+   411→    >
+   412→      <div className="rounded-xl border border-orange-500/20 bg-orange-500/[0.06] p-4">
+   413→        <div className="flex items-center gap-2 mb-3">
+   414→          <ShieldAlert className="size-4 text-orange-400" />
+   415→          <span className="text-xs font-semibold text-orange-400">Action Requires Confirmation</span>
+   416→          <Badge variant="outline" className="ml-auto border-white/10 bg-white/5 text-[10px] text-white/50">
+   417→            Tier {action.tier}
+   418→          </Badge>
+   419→        </div>
+   420→
+   421→        <div className="space-y-2 mb-4">
+   422→          <div className="flex items-center gap-2">
+   423→            <Terminal className="size-3 text-white/30" />
+   424→            <span className="text-xs font-mono text-orange-300/90">{action.tool}</span>
+   425→          </div>
+   426→          <p className="text-sm text-white/70 leading-relaxed">{action.description}</p>
+   427→          {Object.keys(action.args).length > 0 && (
+   428→            <pre className="rounded-lg bg-black/30 px-3 py-2 text-xs font-mono text-white/50 overflow-x-auto">
+   429→              {JSON.stringify(action.args, null, 2)}
+   430→            </pre>
+   431→          )}
+   432→        </div>
+   433→
+   434→        <Separator className="bg-orange-500/10 mb-3" />
+   435→
+   436→        <div className="flex items-center gap-2 justify-end">
+   437→          <Button
+   438→            variant="ghost"
+   439→            size="sm"
+   440→            onClick={handleDeny}
+   441→            className="h-8 gap-1.5 text-white/50 hover:text-rose-300 hover:bg-rose-500/10"
+   442→          >
+   443→            <X className="size-3.5" />
+   444→            Deny
+   445→          </Button>
+   446→          <Button
+   447→            size="sm"
+   448→            onClick={handleConfirm}
+   449→            className="h-8 gap-1.5 bg-emerald-600/80 text-white border-0 hover:bg-emerald-600"
+   450→          >
+   451→            <Check className="size-3.5" />
+   452→            Confirm
+   453→          </Button>
+   454→        </div>
+   455→      </div>
+   456→    </motion.div>
+   457→  );
+   458→}
+   459→
+   460→/* ═══════════════════════════════════════════════════════════════
+   461→   WELCOME / SUGGESTIONS
+   462→   ═══════════════════════════════════════════════════════════════ */
+   463→
+   464→function WelcomeSuggestions() {
+   465→  const handleClick = useCallback(
+   466→    (text: string) => {
+   467→      sendToJarvis(text);
+   468→    },
+   469→    [],
+   470→  );
+   471→
+   472→  return (
+   473→    <div className="flex h-full flex-col items-center justify-center px-6 py-12">
+   474→      <motion.div
+   475→        initial={{ opacity: 0, y: 20 }}
+   476→        animate={{ opacity: 1, y: 0 }}
+   477→        transition={{ delay: 0.2, duration: 0.5 }}
+   478→        className="text-center mb-10"
+   479→      >
+   480→        <div className="mb-4 flex justify-center">
+   481→          <div className="flex size-14 items-center justify-center rounded-2xl border border-cyan-500/20 bg-cyan-500/[0.08]">
+   482→            <Sparkles className="size-7 text-cyan-400" />
+   483→          </div>
+   484→        </div>
+   485→        <h2 className="text-xl font-semibold text-white/90 mb-2">How may I assist you?</h2>
+   486→        <p className="text-sm text-white/40 max-w-xs mx-auto leading-relaxed">
+   487→          I can help with analysis, scheduling, system operations, and more.
+   488→        </p>
+   489→      </motion.div>
+   490→
+   491→      <motion.div
+   492→        initial={{ opacity: 0, y: 16 }}
+   493→        animate={{ opacity: 1, y: 0 }}
+   494→        transition={{ delay: 0.4, duration: 0.5 }}
+   495→        className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-md"
+   496→      >
+   497→        {SUGGESTIONS.map((suggestion, i) => (
+   498→          <motion.button
+   499→            key={suggestion}
+   500→            initial={{ opacity: 0, y: 8 }}
+   501→            animate={{ opacity: 1, y: 0 }}
+   502→            transition={{ delay: 0.5 + i * 0.05 }}
+   503→            onClick={() => handleClick(suggestion)}
+   504→            className="group flex items-center gap-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3.5 py-2.5 text-left text-sm text-white/60 transition-all hover:border-cyan-500/20 hover:bg-cyan-500/[0.06] hover:text-cyan-200"
+   505→          >
+   506→            <span className="flex size-5 shrink-0 items-center justify-center rounded-md border border-white/[0.06] bg-white/[0.03] text-[10px] font-mono text-white/30 group-hover:border-cyan-500/20 group-hover:bg-cyan-500/10 group-hover:text-cyan-400">
+   507→              {String(i + 1).padStart(2, '0')}
+   508→            </span>
+   509→            <span className="truncate text-xs">{suggestion}</span>
+   510→          </motion.button>
+   511→        ))}
+   512→      </motion.div>
+   513→    </div>
+   514→  );
+   515→}
+   516→
+   517→/* ═══════════════════════════════════════════════════════════════
+   518→   CHAT INPUT BAR
+   519→   ═══════════════════════════════════════════════════════════════ */
+   520→
+   521→function ChatInput() {
+   522→  const [input, setInput] = useState('');
+   523→  const textareaRef = useRef<HTMLTextAreaElement>(null);
+   524→  const recognitionRef = useRef<any>(null);
+   525→  const fileInputRef = useRef<HTMLInputElement>(null);
+   526→  const { agentState, setAgentState, setTranscript, addMessage, setPendingAction, setLastToolExec } = useJarvisStore();
+   527→  const isListening = agentState === 'listening';
+   528→  const isBusy = agentState === 'thinking' || agentState === 'speaking' || agentState === 'executing';
+   529→  const canSend = input.trim().length > 0 && !isBusy && !isListening;
+   530→
+   531→  // Auto-resize textarea
+   532→  useEffect(() => {
+   533→    const el = textareaRef.current;
+   534→    if (!el) return;
+   535→    el.style.height = 'auto';
+   536→    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+   537→  }, [input]);
+   538→
+   539→  // Cleanup recognition on unmount
+   540→  useEffect(() => {
+   541→    return () => {
+   542→      if (recognitionRef.current) {
+   543→        try { recognitionRef.current.stop(); } catch { /* ignore */ }
+   544→      }
+   545→    };
+   546→  }, []);
+   547→
+   548→  const handleSend = useCallback(() => {
+   549→    if (!canSend) return;
+   550→    const text = input.trim();
+   551→    setInput('');
+   552→    if (textareaRef.current) textareaRef.current.style.height = 'auto';
+   553→    sendToJarvis(text);
+   554→  }, [canSend, input]);
+   555→
+   556→  const handleMicToggle = useCallback(() => {
+   557→    if (isListening) {
+   558→      // Stop recognition
+   559→      try { recognitionRef.current?.stop(); } catch { /* ignore */ }
+   560→      recognitionRef.current = null;
+   561→      setAgentState('idle');
+   562→      setTranscript('');
+   563→    } else if (!isBusy) {
+   564→      // Start STT
+   565→      const SpeechRecognitionCtor =
+   566→        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+   567→      if (!SpeechRecognitionCtor) return;
+   568→
+   569→      const recognition = new SpeechRecognitionCtor();
+   570→      recognition.continuous = true;
+   571→      recognition.interimResults = true;
+   572→      recognition.lang = 'en-US';
+   573→
+   574→      recognition.onresult = (event: any) => {
+   575→        let interim = '';
+   576→        let final = '';
+   577→        for (let i = event.resultIndex; i < event.results.length; i++) {
+   578→          const t = event.results[i][0].transcript;
+   579→          if (event.results[i].isFinal) {
+   580→            final += t;
+   581→          } else {
+   582→            interim += t;
+   583→          }
+   584→        }
+   585→        if (final.trim()) {
+   586→          setTranscript('');
+   587→          setAgentState('idle');
+   588→          try { recognition.stop(); } catch { /* ignore */ }
+   589→          recognitionRef.current = null;
+   590→          sendToJarvis(final.trim());
+   591→        } else {
+   592→          setTranscript(interim);
+   593→        }
+   594→      };
+   595→
+   596→      recognition.onerror = () => {
+   597→        setAgentState('idle');
+   598→        setTranscript('');
+   599→        recognitionRef.current = null;
+   600→      };
+   601→
+   602→      recognition.onend = () => {
+   603→        // If still in listening state and no final was captured, clean up
+   604→        if (useJarvisStore.getState().agentState === 'listening') {
+   605→          setAgentState('idle');
+   606→          setTranscript('');
+   607→          recognitionRef.current = null;
+   608→        }
+   609→      };
+   610→
+   611→      recognitionRef.current = recognition;
+   612→      try {
+   613→        recognition.start();
+   614→      } catch {
+   615→        // Already started or other error
+   616→      }
+   617→      setAgentState('listening');
+   618→    }
+   619→  }, [isListening, isBusy, setAgentState, setTranscript]);
+   620→
+   621→  const handleImageClick = useCallback(() => {
+   622→    fileInputRef.current?.click();
+   623→  }, []);
+   624→
+   625→  const handleImageChange = useCallback(
+   626→    (e: React.ChangeEvent<HTMLInputElement>) => {
+   627→      const file = e.target.files?.[0];
+   628→      if (!file) return;
+   629→      const reader = new FileReader();
+   630→      reader.onload = () => {
+   631→        const base64 = reader.result as string;
+   632→        sendToJarvis('What do you see?', base64);
+   633→      };
+   634→      reader.readAsDataURL(file);
+   635→      e.target.value = '';
+   636→    },
+   637→    [],
+   638→  );
+   639→
+   640→  const handleKeyDown = useCallback(
+   641→    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+   642→      if (e.key === 'Enter' && !e.shiftKey) {
+   643→        e.preventDefault();
+   644→        handleSend();
+   645→      }
+   646→    },
+   647→    [handleSend],
+   648→  );
+   649→
+   650→  return (
+   651→    <div className="shrink-0 border-t border-white/[0.06] bg-[#080c16]/80 backdrop-blur-xl px-3 py-3 md:px-4 md:py-3.5">
+   652→      <input
+   653→        ref={fileInputRef}
+   654→        type="file"
+   655→        accept="image/*"
+   656→        capture="environment"
+   657→        className="hidden"
+   658→        onChange={handleImageChange}
+   659→      />
+   660→      <div className="mx-auto flex max-w-3xl items-end gap-2">
+   661→        {/* Mic button */}
+   662→        <Tooltip>
+   663→          <TooltipTrigger asChild>
+   664→            <Button
+   665→              variant={isListening ? 'destructive' : 'outline'}
+   666→              size="icon"
+   667→              onClick={handleMicToggle}
+   668→              disabled={isBusy && !isListening}
+   669→              className={cn(
+   670→                'h-10 w-10 shrink-0 rounded-xl border-white/10 bg-white/5 text-white/60 transition-all hover:text-white hover:bg-white/10',
+   671→                isListening &&
+   672→                  'border-rose-500/40 bg-rose-500/15 text-rose-400 hover:bg-rose-500/25 hover:text-rose-300 animate-pulse',
+   673→              )}
+   674→            >
+   675→              {isListening ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+   676→            </Button>
+   677→          </TooltipTrigger>
+   678→          <TooltipContent side="top" className="text-xs">
+   679→            {isListening ? 'Stop listening' : 'Voice input'}
+   680→          </TooltipContent>
+   681→        </Tooltip>
+   682→
+   683→        {/* Camera / image button */}
+   684→        <Tooltip>
+   685→          <TooltipTrigger asChild>
+   686→            <Button
+   687→              variant="outline"
+   688→              size="icon"
+   689→              onClick={handleImageClick}
+   690→              disabled={isBusy}
+   691→              className="h-10 w-10 shrink-0 rounded-xl border-white/10 bg-white/5 text-white/60 transition-all hover:text-white hover:bg-white/10"
+   692→            >
+   693→              <Camera className="size-4" />
+   694→            </Button>
+   695→          </TooltipTrigger>
+   696→          <TooltipContent side="top" className="text-xs">
+   697→            Send image
+   698→          </TooltipContent>
+   699→        </Tooltip>
+   700→
+   701→        {/* Text input */}
+   702→        <div className="relative flex-1">
+   703→          <textarea
+   704→            ref={textareaRef}
+   705→            value={input}
+   706→            onChange={(e) => setInput(e.target.value)}
+   707→            onKeyDown={handleKeyDown}
+   708→            placeholder={
+   709→              isBusy
+   710→                ? agentState === 'thinking'
+   711→                  ? 'JARVIS is processing...'
+   712→                  : agentState === 'speaking'
+   713→                    ? 'JARVIS is speaking...'
+   714→                    : 'Executing command...'
+   715→                : 'Ask JARVIS anything...'
+   716→            }
+   717→            disabled={isBusy || isListening}
+   718→            rows={1}
+   719→            className={cn(
+   720→              'w-full resize-none rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm text-white/90 placeholder:text-white/25 outline-none transition-colors',
+   721→              'focus:border-cyan-500/25 focus:bg-white/[0.05]',
+   722→              'disabled:cursor-not-allowed disabled:opacity-40',
+   723→            )}
+   724→          />
+   725→        </div>
+   726→
+   727→        {/* Send button */}
+   728→        <Tooltip>
+   729→          <TooltipTrigger asChild>
+   730→            <Button
+   731→              size="icon"
+   732→              onClick={handleSend}
+   733→              disabled={!canSend}
+   734→              className={cn(
+   735→                'h-10 w-10 shrink-0 rounded-xl transition-all',
+   736→                canSend
+   737→                  ? 'bg-cyan-500/80 text-white border-0 hover:bg-cyan-500 shadow-[0_0_20px_rgba(0,212,255,0.15)]'
+   738→                  : 'border border-white/[0.08] bg-white/[0.03] text-white/20',
+   739→              )}
+   740→            >
+   741→              {agentState === 'thinking' ? (
+   742→                <Loader2 className="size-4 animate-spin" />
+   743→              ) : (
+   744→                <Send className="size-4" />
+   745→              )}
+   746→            </Button>
+   747→          </TooltipTrigger>
+   748→          <TooltipContent side="top" className="text-xs">
+   749→            Send message
+   750→          </TooltipContent>
+   751→        </Tooltip>
+   752→      </div>
+   753→
+   754→      {/* Footer hint */}
+   755→      <p className="mt-2 text-center text-[10px] text-white/15 font-mono">
+   756→        Press <kbd className="rounded border border-white/10 bg-white/5 px-1 py-0.5 text-[9px]">Enter</kbd> to send{' '}
+   757→        · <kbd className="rounded border border-white/10 bg-white/5 px-1 py-0.5 text-[9px]">Shift+Enter</kbd> for new line
+   758→      </p>
+   759→    </div>
+   760→  );
+   761→}
+   762→
+   763→/* ═══════════════════════════════════════════════════════════════
+   764→   CHAT PANEL
+   765→   ═══════════════════════════════════════════════════════════════ */
+   766→
+   767→function ChatPanel() {
+   768→  const { messages, pendingAction, lastToolExec } = useJarvisStore();
+   769→  const scrollRef = useRef<HTMLDivElement>(null);
+   770→  const hasMessages = messages.length > 0;
+   771→
+   772→  // Auto-scroll to bottom on new messages
+   773→  useEffect(() => {
+   774→    if (scrollRef.current) {
+   775→      const viewport = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
+   776→      if (viewport) {
+   777→        viewport.scrollTop = viewport.scrollHeight;
+   778→      }
+   779→    }
+   780→  }, [messages.length, pendingAction, lastToolExec]);
+   781→
+   782→  return (
+   783→    <div className="flex flex-1 flex-col overflow-hidden bg-[#080c16]/60">
+   784→      {/* Panel header (subtle) */}
+   785→      <div className="flex h-10 shrink-0 items-center border-b border-white/[0.04] px-4">
+   786→        <span className="text-[11px] font-medium tracking-wider text-white/25 uppercase">
+   787→          Conversation
+   788→        </span>
+   789→        {hasMessages && (
+   790→          <Badge
+   791→            variant="outline"
+   792→            className="ml-2 h-5 border-white/[0.06] bg-white/[0.03] px-1.5 text-[10px] text-white/30"
+   793→          >
+   794→            {messages.length}
+   795→          </Badge>
+   796→        )}
+   797→      </div>
+   798→
+   799→      {/* Messages area */}
+   800→      <ScrollArea ref={scrollRef} className="flex-1">
+   801→        {hasMessages ? (
+   802→          <div className="flex flex-col gap-4 py-4">
+   803→            {messages.map((msg) => (
+   804→              <MessageBubble key={msg.id} message={msg} />
+   805→            ))}
+   806→
+   807→            {/* Tool execution result */}
+   808→            <AnimatePresence>
+   809→              {lastToolExec && <ToolExecutionCard exec={lastToolExec} />}
+   810→            </AnimatePresence>
+   811→
+   812→            {/* Pending action confirmation */}
+   813→            <AnimatePresence>
+   814→              {pendingAction && <PendingActionCard action={pendingAction} />}
+   815→            </AnimatePresence>
+   816→          </div>
+   817→        ) : (
+   818→          <WelcomeSuggestions />
+   819→        )}
+   820→      </ScrollArea>
+   821→
+   822→      {/* Input bar */}
+   823→      <ChatInput />
+   824→    </div>
+   825→  );
+   826→}
+   827→
+   828→/* ═══════════════════════════════════════════════════════════════
+   829→   TTS UTILITY
+   830→   ═══════════════════════════════════════════════════════════════ */
+   831→
+   832→function sendToJarvis(text: string, image?: string) {
+   833→  const store = useJarvisStore.getState();
+   834→  store.addMessage({
+   835→    id: crypto.randomUUID(),
+   836→    role: 'user',
+   837→    text,
+   838→    image: image ? image : undefined,
+   839→    timestamp: Date.now(),
+   840→  });
+   841→  store.setAgentState('thinking');
+   842→
+   843→  const apiMessages = store.messages
+   844→    .filter(m => m.role === 'user' || m.role === 'assistant')
+   845→    .slice(-10)
+   846→    .map(m => ({ role: m.role, content: m.text }));
+   847→
+   848→  const body: Record<string, any> = { messages: apiMessages };
+   849→  if (image) body.image = image;
+   850→
+   851→  fetch('/api/jarvis', {
+   852→    method: 'POST',
+   853→    headers: { 'Content-Type': 'application/json' },
+   854→    body: JSON.stringify(body),
+   855→  })
+   856→    .then(r => r.json())
+   857→    .then(data => {
+   858→      if (data.error) {
+   859→        store.addMessage({ id: crypto.randomUUID(), role: 'system', text: `Error: ${data.error}`, timestamp: Date.now() });
+   860→        store.setAgentState('idle');
+   861→        return;
+   862→      }
+   863→      if (data.actionRequest) {
+   864→        store.setPendingAction({
+   865→          actionId: crypto.randomUUID(),
+   866→          tier: data.actionRequest.tier || 'T2',
+   867→          tool: data.actionRequest.tool || 'unknown',
+   868→          args: data.actionRequest.args || {},
+   869→          description: data.actionRequest.description || 'Action requested',
+   870→        });
+   871→        store.setAgentState('awaiting_confirmation');
+   872→        return;
+   873→      }
+   874→      if (data.text) {
+   875→        store.addMessage({ id: crypto.randomUUID(), role: 'assistant', text: data.text, timestamp: Date.now() });
+   876→        speakTextWithMouthSync(data.text);
+   877→      }
+   878→      if (data.toolExecutions) {
+   879→        data.toolExecutions.forEach((te: any) =>
+   880→          store.setLastToolExec({ tool: te.tool, result: te.result, tier: te.tier }),
+   881→        );
+   882→      }
+   883→      store.setAgentState('idle');
+   884→    })
+   885→    .catch(() => {
+   886→      store.addMessage({ id: crypto.randomUUID(), role: 'system', text: 'Connection error. Check your connection.', timestamp: Date.now() });
+   887→      store.setAgentState('idle');
+   888→    });
+   889→}
+   890→
+   891→function speakTextWithMouthSync(text: string) {
+   892→  const synth = window.speechSynthesis;
+   893→  synth.cancel(); // cancel any ongoing speech
+   894→
+   895→  const store = useJarvisStore.getState();
+   896→  store.setAgentState('speaking');
+   897→
+   898→  // Chunk text into pieces < 150 characters at sentence boundaries
+   899→  const chunks: string[] = [];
+   900→  const sentences = text.match(/[^.!?\n]+[.!?\n]+/g) || [text];
+   901→  let buffer = '';
+   902→  for (const s of sentences) {
+   903→    if ((buffer + s).length > 150 && buffer.trim()) {
+   904→      chunks.push(buffer.trim());
+   905→      buffer = s;
+   906→    } else {
+   907→      buffer += s;
+   908→    }
+   909→  }
+   910→  if (buffer.trim()) chunks.push(buffer.trim());
+   911→
+   912→  // Mouth animation decay refs
+   913→  let mouthDecayTimer: ReturnType<typeof setTimeout> | null = null;
+   914→  let keepaliveTimer: ReturnType<typeof setInterval> | null = null;
+   915→
+   916→  // iOS keepalive: pause/resume every 10s to prevent speech from stopping
+   917→  keepaliveTimer = setInterval(() => {
+   918→    if (synth.speaking) {
+   919→      synth.pause();
+   920→      setTimeout(() => synth.resume(), 50);
+   921→    }
+   922→  }, 10000);
+   923→
+   924→  const cleanup = () => {
+   925→    if (keepaliveTimer) clearInterval(keepaliveTimer);
+   926→    if (mouthDecayTimer) clearTimeout(mouthDecayTimer);
+   927→    useJarvisStore.getState().setMouthOpen(0);
+   928→    useJarvisStore.getState().setAgentState('idle');
+   929→  };
+   930→
+   931→  let chunkIdx = 0;
+   932→
+   933→  const speakNextChunk = () => {
+   934→    if (chunkIdx >= chunks.length) {
+   935→      cleanup();
+   936→      return;
+   937→    }
+   938→
+   939→    const utt = new SpeechSynthesisUtterance(chunks[chunkIdx]);
+   940→
+   941→    utt.onboundary = () => {
+   942→      // Animate mouth on word boundary
+   943→      useJarvisStore.getState().setMouthOpen(0.5);
+   944→      if (mouthDecayTimer) clearTimeout(mouthDecayTimer);
+   945→      mouthDecayTimer = setTimeout(() => {
+   946→        useJarvisStore.getState().setMouthOpen(0);
+   947→      }, 200);
+   948→    };
+   949→
+   950→    utt.onend = () => {
+   951→      chunkIdx++;
+   952→      speakNextChunk();
+   953→    };
+   954→
+   955→    utt.onerror = () => {
+   956→      cleanup();
+   957→    };
+   958→
+   959→    synth.speak(utt);
+   960→  };
+   961→
+   962→  speakNextChunk();
+   963→}
+   964→
+   965→/* ═══════════════════════════════════════════════════════════════
+   966→   MAIN PAGE
+   967→   ═══════════════════════════════════════════════════════════════ */
+   968→
+   969→export default function Home() {
+   970→  useEffect(() => {
+   971→    useJarvisStore.getState().setConnected(true);
+   972→    return () => { window.speechSynthesis.cancel(); };
+   973→  }, []);
+   974→
+   975→  return (
+   976→    <div className="flex h-screen flex-col overflow-hidden bg-[#050810] text-white">
+   977→      <TooltipProvider delayDuration={300}>
+   978→        <StatusBar />
+   979→
+   980→        <main className="flex flex-1 flex-col overflow-hidden md:flex-row">
+   981→          <FacePanel />
+   982→          <div className="hidden md:block w-px bg-gradient-to-b from-transparent via-cyan-500/10 to-transparent" />
+   983→          <ChatPanel />
+   984→        </main>
+   985→      </TooltipProvider>
+   986→    </div>
+   987→  );
+   988→}
+   989→

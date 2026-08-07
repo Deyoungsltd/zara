@@ -572,6 +572,8 @@ function ChatInput() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const fileDocInputRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const { agentState, setAgentState, setTranscript } = useJarvisStore();
@@ -618,8 +620,45 @@ function ChatInput() {
   function processImageFile(file: File) {
     if (isBusy) return;
     const reader = new FileReader();
-    reader.onload = () => { const base64 = reader.result as string; sendToJarvis('What do you see in this image?', base64); };
+    reader.onload = () => {
+      const base64 = reader.result as string;
+      // Compress large images to avoid payload limits
+      if (file.size > 2 * 1024 * 1024) {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const maxDim = 1024;
+          let w = img.width, h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) { h = (h / w) * maxDim; w = maxDim; }
+            else { w = (w / h) * maxDim; h = maxDim; }
+          }
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
+          const compressed = canvas.toDataURL('image/jpeg', 0.8);
+          sendToJarvis('What do you see in this image?', compressed);
+        };
+        img.src = base64;
+      } else {
+        sendToJarvis('What do you see in this image?', base64);
+      }
+    };
     reader.readAsDataURL(file);
+  }
+
+  function processDocFile(file: File) {
+    if (isBusy) return;
+    if (file.type.startsWith('text/') || file.name.match(/\.(txt|md|csv|json|xml|html|css|js|ts|py|log)$/i)) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const text = (reader.result as string).slice(0, 4000);
+        sendToJarvis(`Analyze this file (${file.name}):\n\n${text}`);
+      };
+      reader.readAsText(file);
+    } else {
+      // For non-text files, just mention the file
+      sendToJarvis(`I received a file: ${file.name} (${(file.size / 1024).toFixed(1)}KB, ${file.type || 'unknown type'}). I can only read text-based files directly.`);
+    }
   }
 
   const handleScreenCapture = useCallback(async () => {
@@ -718,8 +757,22 @@ function ChatInput() {
         )}
       </AnimatePresence>
 
-      <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => {
+      {/* Hidden file inputs */}
+      {/* Gallery: no capture attribute — lets user pick from photos */}
+      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => {
         const file = e.target.files?.[0]; if (file) processImageFile(file); e.target.value = '';
+      }} />
+      {/* Camera: capture attribute opens camera directly */}
+      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => {
+        const file = e.target.files?.[0]; if (file) processImageFile(file); e.target.value = '';
+      }} />
+      {/* Document/file upload */}
+      <input ref={fileDocInputRef} type="file" accept="image/*,.txt,.md,.csv,.json,.xml,.html,.css,.js,.ts,.py,.log,.pdf,.doc,.docx" className="hidden" onChange={(e) => {
+        const file = e.target.files?.[0]; if (file) {
+          if (file.type.startsWith('image/')) processImageFile(file);
+          else processDocFile(file);
+        }
+        e.target.value = '';
       }} />
 
       <div className="mx-auto flex max-w-3xl items-end gap-2">
@@ -747,7 +800,27 @@ function ChatInput() {
               <Camera className="size-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="top" className="text-xs">Image</TooltipContent>
+          <TooltipContent side="top" className="text-xs">Photo gallery</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="outline" size="icon" onClick={() => cameraInputRef.current?.click()} disabled={isBusy}
+              className="h-10 w-10 shrink-0 rounded-xl border-white/10 bg-white/5 text-white/60 transition-all hover:text-white hover:bg-white/10">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/><line x1="12" y1="7" x2="12" y2="10"/></svg>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-xs">Take photo</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="outline" size="icon" onClick={() => fileDocInputRef.current?.click()} disabled={isBusy}
+              className="h-10 w-10 shrink-0 rounded-xl border-white/10 bg-white/5 text-white/60 transition-all hover:text-white hover:bg-white/10">
+              <Upload className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-xs">Upload file</TooltipContent>
         </Tooltip>
 
         {/* Screen capture — desktop only */}
@@ -875,19 +948,28 @@ function speakTextWithMouthSync(text: string) {
     useJarvisStore.getState().setAgentState('idle');
   };
 
+  // Wait for voices to load (critical on mobile — voices load async)
+  const getVoice = (): SpeechSynthesisVoice | undefined => {
+    const voices = synth.getVoices();
+    return voices.find(v => v.lang.startsWith('en') && v.name.includes('Google')) ||
+           voices.find(v => v.lang.startsWith('en') && !v.localService) ||
+           voices.find(v => v.lang.startsWith('en')) ||
+           voices[0]; // Fallback: use ANY available voice
+  };
+
   let idx = 0;
   const speakNext = () => {
     if (finished || idx >= chunks.length) { cleanup(); return; }
     const utt = new SpeechSynthesisUtterance(chunks[idx]);
 
-    // Pick best available voice
-    const voices = synth.getVoices();
-    const preferred = voices.find(v => v.lang.startsWith('en') && v.name.includes('Google')) ||
-                      voices.find(v => v.lang.startsWith('en') && !v.localService) ||
-                      voices.find(v => v.lang.startsWith('en'));
-    if (preferred) utt.voice = preferred;
+    const voice = getVoice();
+    if (voice) utt.voice = voice;
     utt.rate = 1.0;
     utt.pitch = 0.95;
+    utt.volume = 1.0;
+
+    // Debug log (helps diagnose mobile TTS issues)
+    console.log('[TTS] Speaking chunk', idx + 1, '/', chunks.length, 'voice:', voice?.name || 'default');
 
     utt.onboundary = () => {
       useJarvisStore.getState().setMouthOpen(0.5);
@@ -898,6 +980,24 @@ function speakTextWithMouthSync(text: string) {
     utt.onerror = (e) => { console.warn('[TTS error]', e); cleanup(); };
     synth.speak(utt);
   };
+
+  // On mobile, voices may not be ready yet. Wait up to 2s for them.
+  const voices = synth.getVoices();
+  if (voices.length === 0) {
+    const waitVoices = () => {
+      if (synth.getVoices().length > 0 || finished) {
+        speakNext();
+        return;
+      }
+      // Retry after a short delay
+      setTimeout(waitVoices, 200);
+    };
+    setTimeout(waitVoices, 100);
+    // Safety: start anyway after 2s even if no voices loaded
+    setTimeout(() => { if (!finished) speakNext(); }, 2000);
+  } else {
+    speakNext();
+  }
 
   // Mobile Chrome bug: speechSynthesis pauses after ~15s.
   // Workaround: briefly pause+resume every 10s to keep it alive.
@@ -910,9 +1010,7 @@ function speakTextWithMouthSync(text: string) {
   }, 10000);
 
   // Safety timeout: force-stop after 60s total
-  const safetyTimeout = setTimeout(() => { cleanup(); clearInterval(keepalive); }, 60000);
-
-  speakNext();
+  setTimeout(() => { cleanup(); clearInterval(keepalive); }, 60000);
 }
 
 /* ═══════════════════════════════════════════════════════════════

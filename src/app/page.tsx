@@ -151,7 +151,7 @@ function StatusBar({ wakeWordActive, onToggleWakeWord, installPrompt, onInstallC
     : 'Full security (voice + biometric)';
 
   return (
-    <header className="relative z-20 flex h-12 items-center justify-between border-b border-white/[0.06] px-4 md:px-6 bg-[#060a14]/80 backdrop-blur-xl">
+    <header className="relative z-20 flex h-12 items-center justify-between border-b border-white/[0.06] px-4 md:px-6 bg-[#050508]/90 backdrop-blur-xl">
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
           <div className="flex size-7 items-center justify-center rounded-lg bg-cyan-500/10 border border-cyan-500/20">
@@ -253,24 +253,14 @@ function FacePanel({ analyser }: { analyser: AnalyserNode | null }) {
   const { agentState, transcript } = useJarvisStore();
 
   return (
-    <div className="relative h-[24vh] min-h-[180px] w-full md:h-full md:w-[42%] lg:w-[40%] shrink-0">
-      {/* Ambient radial gradient background */}
-      <div className="absolute inset-0 z-0" style={{
-        background: 'radial-gradient(ellipse at 50% 40%, rgba(0,40,80,0.3) 0%, rgba(5,8,16,0) 70%)',
-      }} />
-      {/* Subtle grid overlay */}
-      <div className="absolute inset-0 z-0 opacity-[0.03]" style={{
-        backgroundImage: 'linear-gradient(rgba(0,232,255,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(0,232,255,0.15) 1px, transparent 1px)',
-        backgroundSize: '40px 40px',
-      }} />
-
+    <div className="relative h-[30vh] min-h-[220px] w-full md:h-full md:w-[42%] lg:w-[40%] shrink-0 bg-[#050508]">
       {/* 3D Face */}
       <div className="relative z-[1] h-full w-full">
         <JarvisFace />
       </div>
 
-      {/* Audio visualizer */}
-      <div className="absolute bottom-4 left-4 right-4 z-10">
+      {/* Audio visualizer — overlaid at bottom */}
+      <div className="absolute bottom-3 left-4 right-4 z-10">
         <AudioVisualizer analyser={analyser} active={agentState === 'listening' || agentState === 'speaking'} />
       </div>
 
@@ -738,7 +728,7 @@ function ChatInput() {
       ref={dropRef}
       onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}
       className={cn(
-        'shrink-0 border-t bg-[#080c16]/80 backdrop-blur-xl px-3 py-3 md:px-4 md:py-3.5 transition-colors',
+        'shrink-0 border-t bg-[#0a0a0f]/95 backdrop-blur-xl px-3 py-3 md:px-4 md:py-3.5 transition-colors',
         isDragging ? 'border-cyan-500/40 bg-cyan-500/[0.04]' : 'border-white/[0.06]',
       )}
     >
@@ -891,9 +881,9 @@ function ChatPanel() {
   }, [messages.length, pendingAction, lastToolExec]);
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden bg-[#080c16]/60">
+    <div className="flex flex-1 flex-col overflow-hidden bg-[#0a0a0f]">
       <div className="flex h-9 shrink-0 items-center border-b border-white/[0.04] px-4">
-        <span className="text-[10px] font-medium tracking-wider text-white/25 uppercase" style={{ fontFamily: 'var(--font-orbitron), monospace' }}>Conversation</span>
+        <span className="text-[10px] font-medium tracking-[0.3em] text-white/20 uppercase" style={{ fontFamily: "'Courier New', monospace" }}>CONVERSATION</span>
         {hasMessages && (
           <Badge variant="outline" className="ml-2 h-4 border-white/[0.06] bg-white/[0.03] px-1.5 text-[9px] text-white/30">
             {messages.length}
@@ -1215,7 +1205,7 @@ export default function Home() {
   }, [wakeWordActive]);
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#050810] text-white">
+    <div className="flex h-screen flex-col overflow-hidden bg-[#050508] text-white">
       <TooltipProvider delayDuration={300}>
         <StatusBar wakeWordActive={wakeWordActive} onToggleWakeWord={toggleWakeWord} installPrompt={installPrompt} onInstallClick={handleInstallClick} securityLevel={securityLevel} onCycleSecurity={cycleSecurity} />
         <main className="flex flex-1 flex-col overflow-hidden md:flex-row">

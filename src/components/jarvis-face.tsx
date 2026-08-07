@@ -1,251 +1,299 @@
 'use client';
 
-import { useRef, useMemo, useEffect, useState } from 'react';
+import { useRef, useMemo, useEffect, useState, useCallback } from 'react';
 import { useJarvisStore } from '@/lib/jarvis-store';
 import type { AgentState } from '@/lib/jarvis-store';
 
 /* ═══════════════════════════════════════════════════════════════
-   CSS/SVG JARVIS FACE — works on all devices including mobile
+   CINEMATIC JARVIS FUI FACE
+   Inspired by the Iron Man HUD / Stark Industries FUI
    ═══════════════════════════════════════════════════════════════ */
 
-function getStateColors(state: AgentState) {
-  const map: Record<AgentState, { eye: string; ring: string; glow: string; mouth: string }> = {
-    idle:       { eye: '#00e8ff', ring: '#00d4ff', glow: 'rgba(0,212,255,0.15)', mouth: '#00ffdd' },
-    listening:  { eye: '#f59e0b', ring: '#f59e0b', glow: 'rgba(245,158,11,0.2)',  mouth: '#fbbf24' },
-    thinking:   { eye: '#a78bfa', ring: '#8b5cf6', glow: 'rgba(139,92,246,0.2)',  mouth: '#a78bfa' },
-    speaking:   { eye: '#34d399', ring: '#10b981', glow: 'rgba(16,185,129,0.2)',  mouth: '#34d399' },
-    executing:  { eye: '#f97316', ring: '#ea580c', glow: 'rgba(234,88,12,0.2)',   mouth: '#fb923c' },
-    error:      { eye: '#f87171', ring: '#ef4444', glow: 'rgba(239,68,68,0.2)',   mouth: '#f87171' },
-  };
-  return map[state];
-}
+const STATE_COLORS: Record<AgentState, { primary: string; secondary: string; glow: string; dim: string }> = {
+  idle:       { primary: '#00d4ff', secondary: '#0088aa', glow: 'rgba(0,212,255,0.35)',  dim: 'rgba(0,212,255,0.08)' },
+  listening:  { primary: '#f59e0b', secondary: '#b45309', glow: 'rgba(245,158,11,0.4)',   dim: 'rgba(245,158,11,0.1)' },
+  thinking:   { primary: '#a78bfa', secondary: '#7c3aed', glow: 'rgba(167,139,250,0.4)',  dim: 'rgba(167,139,250,0.1)' },
+  speaking:   { primary: '#34d399', secondary: '#059669', glow: 'rgba(52,211,153,0.4)',   dim: 'rgba(52,211,153,0.1)' },
+  executing:  { primary: '#f97316', secondary: '#c2410c', glow: 'rgba(249,115,22,0.4)',   dim: 'rgba(249,115,22,0.1)' },
+  error:      { primary: '#f87171', secondary: '#b91c1c', glow: 'rgba(248,113,113,0.4)',  dim: 'rgba(248,113,113,0.1)' },
+};
 
 export default function JarvisFace() {
   const { agentState, mouthOpen } = useJarvisStore();
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [time, setTime] = useState('00:00:00');
   const [blink, setBlink] = useState(false);
-  const colors = getStateColors(agentState);
+  const c = STATE_COLORS[agentState];
 
-  // Blink every 3-5 seconds
+  // Clock
   useEffect(() => {
-    const interval = setInterval(() => {
+    const tick = () => setTime(new Date().toTimeString().split(' ')[0]);
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Blink every 3-5s
+  useEffect(() => {
+    const id = setInterval(() => {
       setBlink(true);
-      setTimeout(() => setBlink(false), 150);
+      setTimeout(() => setBlink(false), 120);
     }, 3000 + Math.random() * 2000);
-    return () => clearInterval(interval);
+    return () => clearInterval(id);
   }, []);
 
-  // Particles
-  const particles = useMemo(() => {
-    return Array.from({ length: 30 }, (_, i) => ({
-      id: i,
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-      size: 1 + Math.random() * 2,
-      duration: 3 + Math.random() * 4,
-      delay: Math.random() * 3,
-    }));
-  }, []);
+  // Random data values
+  const dataValues = useMemo(() => ({
+    sysLoad: (30 + Math.random() * 40).toFixed(1),
+    neuralNet: (85 + Math.random() * 14).toFixed(1),
+    responseTime: (12 + Math.random() * 30).toFixed(0),
+    memoryUsage: (42 + Math.random() * 30).toFixed(1),
+  }), []);
 
-  const mouthHeight = Math.max(2, mouthOpen * 12);
-  const eyeScaleY = blink ? 0.1 : 1;
+  const isSpeaking = agentState === 'speaking';
+  const isListening = agentState === 'listening';
+  const isThinking = agentState === 'thinking';
+  const coreScale = isSpeaking ? 1 + mouthOpen * 0.15 : isListening ? 1.08 : 1;
+  const coreOpacity = isThinking ? 0.6 + Math.sin(Date.now() / 200) * 0.3 : 1;
 
   return (
-    <div ref={containerRef} className="relative h-full w-full overflow-hidden">
-      {/* Center glow */}
+    <div className="jarvis-face-container relative h-full w-full overflow-hidden select-none">
+      {/* Background grid */}
+      <div className="jarvis-bg-grid absolute inset-0 z-0" />
+      <div className="jarvis-bg-vignette absolute inset-0 z-0" />
+
+      {/* Ambient glow behind core */}
       <div
-        className="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 rounded-full transition-all duration-700"
+        className="absolute left-1/2 top-[45%] z-[1] -translate-x-1/2 -translate-y-1/2 rounded-full transition-all duration-1000"
         style={{
-          width: '60%',
-          height: '50%',
-          background: `radial-gradient(ellipse, ${colors.glow} 0%, transparent 70%)`,
-          filter: 'blur(30px)',
+          width: '50%', height: '50%',
+          background: `radial-gradient(ellipse, ${c.glow} 0%, transparent 70%)`,
+          filter: 'blur(40px)',
+          opacity: isSpeaking ? 0.8 : 0.5,
         }}
       />
 
-      {/* Floating particles */}
-      {particles.map((p) => (
-        <div
-          key={p.id}
-          className="absolute rounded-full"
-          style={{
-            left: `${p.x}%`,
-            top: `${p.y}%`,
-            width: p.size,
-            height: p.size,
-            backgroundColor: colors.eye,
-            opacity: 0.3,
-            animation: `jarvis-float ${p.duration}s ease-in-out ${p.delay}s infinite alternate`,
-          }}
-        />
-      ))}
-
-      {/* Main SVG Face */}
+      {/* Main SVG HUD */}
       <svg
-        viewBox="0 0 400 400"
-        className="absolute left-1/2 top-1/2 h-[70%] w-[70%] -translate-x-1/2 -translate-y-1/2"
-        style={{ filter: `drop-shadow(0 0 20px ${colors.glow})` }}
+        viewBox="0 0 500 500"
+        className="jarvis-svg absolute left-1/2 top-[45%] z-[2] h-[85%] w-[85%] -translate-x-1/2 -translate-y-1/2"
       >
         <defs>
-          <radialGradient id="eyeGrad" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={colors.eye} stopOpacity="1" />
-            <stop offset="60%" stopColor={colors.eye} stopOpacity="0.6" />
-            <stop offset="100%" stopColor={colors.eye} stopOpacity="0" />
+          {/* Core glow gradient */}
+          <radialGradient id="coreGrad">
+            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
+            <stop offset="30%" stopColor={c.primary} stopOpacity="0.8" />
+            <stop offset="70%" stopColor={c.secondary} stopOpacity="0.3" />
+            <stop offset="100%" stopColor={c.secondary} stopOpacity="0" />
           </radialGradient>
-          <filter id="glow">
-            <feGaussianBlur stdDeviation="3" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
+
+          {/* Ring glow filter */}
+          <filter id="ringGlow">
+            <feGaussianBlur stdDeviation="2" result="blur" />
+            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
           <filter id="strongGlow">
-            <feGaussianBlur stdDeviation="6" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
+            <feGaussianBlur stdDeviation="5" result="blur" />
+            <feMerge><feMergeNode in="blur" /><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
+          <filter id="softGlow">
+            <feGaussianBlur stdDeviation="8" result="blur" />
+            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+
+          {/* Clip for scan line */}
+          <clipPath id="circleClip">
+            <circle cx="250" cy="230" r="190" />
+          </clipPath>
         </defs>
 
-        {/* Outer HUD ring */}
-        <circle
-          cx="200" cy="200" r="180"
-          fill="none"
-          stroke={colors.ring}
-          strokeWidth="0.5"
-          opacity="0.3"
-          strokeDasharray="8 12"
-        />
-        <circle
-          cx="200" cy="200" r="165"
-          fill="none"
-          stroke={colors.ring}
-          strokeWidth="0.3"
-          opacity="0.15"
-          strokeDasharray="3 20"
-          className="origin-center"
-          style={{ animation: 'jarvis-rotate 20s linear infinite' }}
-        />
+        {/* ═══ OUTER HUD RINGS ═══ */}
 
-        {/* Inner arc segments */}
-        <path
-          d="M 80 200 A 120 120 0 0 1 200 80"
-          fill="none"
-          stroke={colors.eye}
-          strokeWidth="1"
-          opacity="0.2"
-          strokeLinecap="round"
-          className="origin-center"
-          style={{ animation: 'jarvis-rotate 15s linear infinite reverse' }}
-        />
-        <path
-          d="M 320 200 A 120 120 0 0 1 200 320"
-          fill="none"
-          stroke={colors.eye}
-          strokeWidth="1"
-          opacity="0.2"
-          strokeLinecap="round"
-          className="origin-center"
-          style={{ animation: 'jarvis-rotate 18s linear infinite' }}
-        />
+        {/* Outermost dashed ring */}
+        <circle cx="250" cy="230" r="220" fill="none" stroke={c.primary} strokeWidth="0.3" opacity="0.2"
+          strokeDasharray="4 8" className="jarvis-ring-slow" />
 
-        {/* Cross-hair lines */}
-        <line x1="200" y1="60" x2="200" y2="100" stroke={colors.eye} strokeWidth="0.3" opacity="0.15" />
-        <line x1="200" y1="300" x2="200" y2="340" stroke={colors.eye} strokeWidth="0.3" opacity="0.15" />
-        <line x1="60" y1="200" x2="100" y2="200" stroke={colors.eye} strokeWidth="0.3" opacity="0.15" />
-        <line x1="300" y1="200" x2="340" y2="200" stroke={colors.eye} strokeWidth="0.3" opacity="0.15" />
-
-        {/* Eyes */}
-        <g filter="url(#strongGlow)" style={{ transform: `scale(1, ${eyeScaleY})`, transformOrigin: '200px 175px', transition: 'transform 0.1s' }}>
-          {/* Left eye */}
-          <ellipse cx="160" cy="175" rx="28" ry="14" fill="url(#eyeGrad)" />
-          <ellipse cx="160" cy="175" rx="18" ry="9" fill={colors.eye} opacity="0.9" />
-          <ellipse cx="160" cy="175" rx="8" ry="8" fill="white" opacity="0.9" />
-          <ellipse cx="162" cy="173" rx="3" ry="3" fill="white" />
-
-          {/* Right eye */}
-          <ellipse cx="240" cy="175" rx="28" ry="14" fill="url(#eyeGrad)" />
-          <ellipse cx="240" cy="175" rx="18" ry="9" fill={colors.eye} opacity="0.9" />
-          <ellipse cx="240" cy="175" rx="8" ry="8" fill="white" opacity="0.9" />
-          <ellipse cx="242" cy="173" rx="3" ry="3" fill="white" />
+        {/* Outer data ring with tick marks */}
+        <g opacity="0.25" className="jarvis-ring-reverse">
+          <circle cx="250" cy="230" r="195" fill="none" stroke={c.primary} strokeWidth="0.5" strokeDasharray="1 14" />
+          {Array.from({ length: 72 }, (_, i) => {
+            const a = (i / 72) * Math.PI * 2;
+            const len = i % 6 === 0 ? 10 : i % 3 === 0 ? 6 : 3;
+            const x1 = 250 + Math.cos(a) * 190, y1 = 230 + Math.sin(a) * 190;
+            const x2 = 250 + Math.cos(a) * (190 - len), y2 = 230 + Math.sin(a) * (190 - len);
+            return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={c.primary} strokeWidth={i % 6 === 0 ? 0.8 : 0.3} />;
+          })}
         </g>
 
-        {/* Eye connecting arc */}
-        <path
-          d="M 165 165 Q 200 145 235 165"
-          fill="none"
-          stroke={colors.eye}
-          strokeWidth="0.8"
-          opacity="0.3"
-        />
+        {/* Arc segments — top left */}
+        <path d="M 120 120 A 170 170 0 0 1 250 60" fill="none" stroke={c.primary} strokeWidth="1.5" opacity="0.3" strokeLinecap="round"
+          filter="url(#ringGlow)" className="jarvis-ring-slow" />
+        {/* Arc segments — bottom right */}
+        <path d="M 380 340 A 170 170 0 0 1 250 400" fill="none" stroke={c.primary} strokeWidth="1.5" opacity="0.3" strokeLinecap="round"
+          filter="url(#ringGlow)" className="jarvis-ring-reverse" />
 
-        {/* Mouth */}
-        <g filter="url(#glow)">
-          <rect
-            x="175"
-            y="225"
-            width="50"
-            height={mouthHeight}
-            rx="2"
-            fill={colors.mouth}
-            opacity="0.8"
-            style={{ transition: 'height 0.1s ease-out' }}
-          />
-          {/* Mouth horizontal lines */}
-          {agentState === 'speaking' && (
-            <>
-              <line x1="178" y1="228" x2="222" y2="228" stroke={colors.mouth} strokeWidth="0.5" opacity="0.4" />
-              <line x1="180" y1="231" x2="220" y2="231" stroke={colors.mouth} strokeWidth="0.5" opacity="0.3" />
-            </>
-          )}
+        {/* ═══ IRIS MECHANISM ═══ */}
+
+        {/* Outer iris ring */}
+        <circle cx="250" cy="230" r="140" fill="none" stroke={c.primary} strokeWidth="1" opacity="0.4" filter="url(#ringGlow)"
+          className="jarvis-ring-slow" />
+
+        {/* Iris shutter blades */}
+        <g className="jarvis-iris" style={{ transformOrigin: '250px 230px' }}>
+          {Array.from({ length: 8 }, (_, i) => {
+            const angle = (i / 8) * 360;
+            const openAngle = isListening ? 25 : isSpeaking ? 15 : blink ? 2 : 8;
+            const x1 = 250 + Math.cos(((angle - openAngle) * Math.PI) / 180) * 55;
+            const y1 = 230 + Math.sin(((angle - openAngle) * Math.PI) / 180) * 55;
+            const x2 = 250 + Math.cos(((angle + openAngle) * Math.PI) / 180) * 130;
+            const y2 = 230 + Math.sin(((angle + openAngle) * Math.PI) / 180) * 130;
+            return (
+              <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
+                stroke={c.primary} strokeWidth={1.2} opacity={0.5} strokeLinecap="round"
+                filter="url(#ringGlow)" />
+            );
+          })}
         </g>
 
-        {/* Side data indicators */}
-        <g opacity="0.2" className="origin-center" style={{ animation: 'jarvis-rotate 30s linear infinite' }}>
-          <text x="70" y="140" fill={colors.eye} fontSize="8" fontFamily="monospace">SYS.OK</text>
-          <text x="300" y="270" fill={colors.eye} fontSize="8" fontFamily="monospace">V2.1</text>
+        {/* Inner iris ring */}
+        <circle cx="250" cy="230" r="90" fill="none" stroke={c.primary} strokeWidth="0.8" opacity="0.35"
+          className="jarvis-ring-reverse" />
+        <circle cx="250" cy="230" r="60" fill="none" stroke={c.primary} strokeWidth="0.5" opacity="0.25"
+          className="jarvis-ring-fast" />
+
+        {/* ═══ CORE / EYE ═══ */}
+
+        {/* Core glow backdrop */}
+        <circle cx="250" cy="230" r="50" fill={c.primary} opacity="0.15" filter="url(#softGlow)"
+          style={{ transition: 'r 0.3s' }} />
+
+        {/* Core bright center */}
+        <g style={{
+          transform: `scale(${coreScale})`,
+          transformOrigin: '250px 230px',
+          opacity: coreOpacity,
+          transition: 'transform 0.15s ease-out, opacity 0.2s',
+        }}>
+          <circle cx="250" cy="230" r="30" fill="url(#coreGrad)" filter="url(#strongGlow)" />
+          <circle cx="250" cy="230" r="12" fill="white" opacity="0.9" filter="url(#strongGlow)" />
+          <circle cx="250" cy="230" r="5" fill="white" />
         </g>
 
-        {/* Scan line effect */}
-        <rect
-          x="0" y="0" width="400" height="2"
-          fill={colors.eye}
-          opacity="0.08"
-          className="origin-center"
-          style={{ animation: 'jarvis-scanline 4s linear infinite' }}
-        />
+        {/* Speaking mouth bar */}
+        {isSpeaking && (
+          <rect x="225" y="280" width={40 + mouthOpen * 20} height={2 + mouthOpen * 4} rx="1"
+            fill={c.primary} opacity="0.7" filter="url(#ringGlow)"
+            style={{ transition: 'width 0.1s, height 0.1s' }} />
+        )}
+
+        {/* ═══ DATA READOUTS ═══ */}
+        <g className="jarvis-data" opacity="0.5">
+          {/* Left data column */}
+          <text x="40" y="100" fill={c.primary} fontSize="7" fontFamily="'Courier New', monospace" letterSpacing="2">STARK INDUSTRIES</text>
+          <text x="40" y="115" fill={c.primary} fontSize="5" fontFamily="'Courier New', monospace" opacity="0.6">SECURE TERMINAL v4.1</text>
+
+          <text x="40" y="150" fill={c.primary} fontSize="6" fontFamily="'Courier New', monospace" opacity="0.4">SYS.LOAD</text>
+          <text x="40" y="162" fill={c.primary} fontSize="10" fontFamily="'Courier New', monospace" fontWeight="bold">{dataValues.sysLoad}%</text>
+
+          <text x="40" y="190" fill={c.primary} fontSize="6" fontFamily="'Courier New', monospace" opacity="0.4">NEURAL.NET</text>
+          <text x="40" y="202" fill={c.primary} fontSize="10" fontFamily="'Courier New', monospace" fontWeight="bold">{dataValues.neuralNet}%</text>
+
+          <text x="40" y="230" fill={c.primary} fontSize="6" fontFamily="'Courier New', monospace" opacity="0.4">RESPONSE</text>
+          <text x="40" y="242" fill={c.primary} fontSize="10" fontFamily="'Courier New', monospace" fontWeight="bold">{dataValues.responseTime}ms</text>
+
+          {/* Right data column */}
+          <text x="350" y="100" fill={c.primary} fontSize="6" fontFamily="'Courier New', monospace" opacity="0.4">MEM.ALLOC</text>
+          <text x="350" y="112" fill={c.primary} fontSize="10" fontFamily="'Courier New', monospace" fontWeight="bold">{dataValues.memoryUsage}%</text>
+
+          <text x="350" y="140" fill={c.primary} fontSize="6" fontFamily="'Courier New', monospace" opacity="0.4">UPTIME</text>
+          <text x="350" y="152" fill={c.primary} fontSize="10" fontFamily="'Courier New', monospace" fontWeight="bold">99.97%</text>
+
+          {/* Arc gauge — top right */}
+          <path d="M 390 80 A 40 40 0 0 1 430 120" fill="none" stroke={c.dim} strokeWidth="3" strokeLinecap="round" />
+          <path d="M 390 80 A 40 40 0 0 1 425 115" fill="none" stroke={c.primary} strokeWidth="3" strokeLinecap="round" filter="url(#ringGlow)" />
+          <text x="400" y="112" fill={c.primary} fontSize="9" fontFamily="'Courier New', monospace" fontWeight="bold">{time.slice(0, 5)}</text>
+
+          {/* Arc gauge — bottom left */}
+          <path d="M 70 380 A 35 35 0 0 1 140 380" fill="none" stroke={c.dim} strokeWidth="3" strokeLinecap="round" />
+          <path d="M 75 380 A 30 30 0 0 1 130 380" fill="none" stroke={c.primary} strokeWidth="3" strokeLinecap="round" filter="url(#ringGlow)" opacity="0.6" />
+        </g>
+
+        {/* Status label */}
+        <text x="250" y="340" textAnchor="middle" fill={c.primary} fontSize="8" fontFamily="'Courier New', monospace"
+          letterSpacing="4" opacity="0.6" className="uppercase">{agentState}</text>
+
+        {/* Bottom branding */}
+        <text x="250" y="470" textAnchor="middle" fill={c.primary} fontSize="10" fontFamily="'Courier New', monospace"
+          letterSpacing="6" opacity="0.25">Z.A.R.A.</text>
+
+        {/* Scan line */}
+        <rect x="60" y="0" width="380" height="1.5" fill={c.primary} opacity="0.06"
+          clipPath="url(#circleClip)" className="jarvis-scanline" />
+
+        {/* Horizontal crosshairs */}
+        <line x1="250" y1="40" x2="250" y2="80" stroke={c.primary} strokeWidth="0.3" opacity="0.15" />
+        <line x1="250" y1="380" x2="250" y2="420" stroke={c.primary} strokeWidth="0.3" opacity="0.15" />
+        <line x1="60" y1="230" x2="100" y2="230" stroke={c.primary} strokeWidth="0.3" opacity="0.15" />
+        <line x1="400" y1="230" x2="440" y2="230" stroke={c.primary} strokeWidth="0.3" opacity="0.15" />
       </svg>
 
-      {/* State label */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
-        <div
-          className="rounded-full border px-3 py-1 text-[9px] font-medium tracking-[0.2em] uppercase backdrop-blur-md transition-all duration-500"
-          style={{
-            borderColor: `${colors.eye}33`,
-            backgroundColor: `${colors.eye}15`,
-            color: colors.eye,
-            fontFamily: 'var(--font-orbitron), monospace',
-          }}
-        >
-          {agentState}
-        </div>
-      </div>
-
-      {/* Inline keyframes */}
-      <style jsx>{`
-        @keyframes jarvis-float {
-          0% { transform: translateY(0) translateX(0); opacity: 0.1; }
-          100% { transform: translateY(-20px) translateX(10px); opacity: 0.4; }
+      {/* ═══ INLINE STYLES & ANIMATIONS ═══ */}
+      <style jsx global>{`
+        .jarvis-face-container {
+          background: #050508;
         }
-        @keyframes jarvis-rotate {
+        .jarvis-bg-grid {
+          background-image:
+            linear-gradient(rgba(0,212,255,0.04) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(0,212,255,0.04) 1px, transparent 1px);
+          background-size: 30px 30px;
+        }
+        .jarvis-bg-vignette {
+          background: radial-gradient(ellipse at 50% 45%, transparent 30%, #050508 80%);
+        }
+        @keyframes jarvis-rotate-slow {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
-        @keyframes jarvis-scanline {
-          0% { transform: translateY(-200px); }
-          100% { transform: translateY(200px); }
+        @keyframes jarvis-rotate-reverse {
+          from { transform: rotate(360deg); }
+          to { transform: rotate(0deg); }
+        }
+        @keyframes jarvis-rotate-fast {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes jarvis-scan {
+          0% { transform: translateY(-250px); }
+          100% { transform: translateY(250px); }
+        }
+        @keyframes jarvis-iris-rotate {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes jarvis-data-pulse {
+          0%, 100% { opacity: 0.5; }
+          50% { opacity: 0.8; }
+        }
+        .jarvis-ring-slow {
+ animation: jarvis-rotate-slow 30s linear infinite;
+          transform-origin: 250px 230px;
+        }
+        .jarvis-ring-reverse {
+          animation: jarvis-rotate-reverse 25s linear infinite;
+          transform-origin: 250px 230px;
+        }
+        .jarvis-ring-fast {
+          animation: jarvis-rotate-fast 8s linear infinite;
+          transform-origin: 250px 230px;
+        }
+        .jarvis-scanline {
+          animation: jarvis-scan 5s linear infinite;
+        }
+        .jarvis-iris {
+          animation: jarvis-iris-rotate 12s linear infinite;
+        }
+        .jarvis-data {
+          animation: jarvis-data-pulse 4s ease-in-out infinite;
         }
       `}</style>
     </div>
